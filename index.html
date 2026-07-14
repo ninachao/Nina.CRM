@@ -242,6 +242,16 @@ textarea.inp{resize:vertical}
 .weekbox{white-space:pre-wrap;font-size:13.5px;line-height:1.7;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;font-family:'Inter','Noto Sans TC',monospace}
 .hide-sm{}@media(max-width:560px){.hide-sm{display:none}}
 .exch{font-size:13.5px;white-space:pre-wrap;line-height:1.6;color:#3f3b52}
+
+/* orders */
+.otwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:1px 2px 0 #efe7d6}
+.otable{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1080px}
+.otable th{background:#faf8f2;font-size:11px;color:#8b8699;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.otable td{padding:7px 10px;border-bottom:1px solid #f4f0e6;white-space:nowrap;vertical-align:top}
+.otable tr:last-child td{border-bottom:none}
+.otable tbody tr:hover td{background:#fdfbf5}
+.otable .num{text-align:right;font-variant-numeric:tabular-nums}
+.revchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--grl);color:#2f9e44}
 </style>
 </head>
 <body>
@@ -296,6 +306,16 @@ var SAMPLE_STATUS=["待寄","已寄出","客人已收","已回饋"];
 var SAMPLE_STYLE={"待寄":"background:#f1f0ea;color:#7c7890","已寄出":"background:#fff4d6;color:#b8860b","客人已收":"background:#e5f4fe;color:#1971c2","已回饋":"background:#e3f7e8;color:#2f9e44"};
 var HOLD_OPTS=[["7","7 天"],["14","14 天"],["30","30 天"],["60","60 天"]];
 
+/* 訂單 */
+var ORDER_STATUS=["生產中","已出貨","已收款","結案"];
+var ORDER_STYLE={"生產中":"background:#f0ebfd;color:#6741d9","已出貨":"background:#e5f4fe;color:#1971c2","已收款":"background:#e3f7e8;color:#2f9e44","結案":"background:#f1f0ea;color:#7c7890"};
+var ORDER_CURRENCIES=["USD","CNY","VND","TWD"];
+function num(v){var n=parseFloat(String(v==null?"":v).replace(/,/g,""));return isFinite(n)?n:0;}
+function fmtMoney(n){if(!isFinite(n))n=0;return n.toLocaleString("en-US",{maximumFractionDigits:2});}
+function orderAmount(o){return num(o.qty)*num(o.price);}
+function custRevenue(c){var by={};(c.orders||[]).forEach(function(o){var cur=o.currency||"USD";by[cur]=(by[cur]||0)+orderAmount(o);});return by;}
+function revenueText(by){var ks=Object.keys(by).filter(function(k){return by[k]>0;});return ks.map(function(k){return k+" "+fmtMoney(by[k]);}).join(" + ");}
+
 var IC={
   bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   plus:'<path d="M5 12h14M12 5v14"/>',back:'<path d="m15 18-6-6 6-6"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',
@@ -322,7 +342,7 @@ function icon(n,sz){var s=sz||16;return '<svg class="ic" style="width:'+s+'px;he
 
 /* ===================== 種子 ===================== */
 function seed(){
-  function c(o){return Object.assign({id:uid(),website:"",email:"",contacts:[],rating:"",background:"",relationship:"",projects:[],createdAt:todayISO()},o);}
+  function c(o){return Object.assign({id:uid(),website:"",email:"",contacts:[],rating:"",background:"",relationship:"",projects:[],orders:[],createdAt:todayISO()},o);}
   function p(o){return Object.assign({id:uid(),customerSubject:"",factorySubject:"",stage:"待我處理",nextAction:"",partNumbers:"",isComplaint:false,followUpDate:"",deliveryDate:"",hold:null,archived:false,updates:[],quotes:[],samples:[]},o);}
   function u(d,n){return {id:uid(),date:d,note:n,emails:[]};}
   return {version:2,settings:{staleDays:7,leadDays:7},exchange:{text:"1 USD = 25320 VND\n1 USD = 7 CNY\n1 CNY = 3600 VND",updatedAt:"2026-08-01"},
@@ -371,6 +391,7 @@ function seed(){
           updates:[u("2026-06-05","確認 Garmin Plate 的越南報價。")]})
       ]}),
     c({name:"GPS（UA 系列）",type:"既有客戶（GPS / UA）",status:"existing",rating:"A",background:"UA 系列產品與彩盒包裝專案。",relationship:"進行中既有客戶。",
+      orders:[{id:uid(),od:"2026-06-17",custDelivery:"2026-10-26",po:"",pn:"S6GL000006",qty:"540",price:"",currency:"USD",csNo:"",cpNo:"",pcNo:"",factoryDelivery:"",factory:"",shipDate:"",arNo:"",status:"生產中",note:"UA-HARDWPUNIXXL 彩盒訂單（示範資料，可編輯或刪除）",createdAt:"2026-06-17"}],
       projects:[
         p({customerSubject:"Packaging for UA-25MMFLAT / UA-25AMPS",factorySubject:"UA(GPS) 更新 BOM；UA-UBOLT-OB 彩盒報價",partNumbers:"S6GL000007",stage:"打樣中",
           updates:[u("2026-06-03","重新確認產品報價（自帶吊耳）> 安排打樣 > 報價給客戶。")]}),
@@ -403,6 +424,14 @@ function normalize(d){
     if(c.rating){var r0=c.rating.charAt(0);c.rating=(r0==="A"||r0==="B"||r0==="C")?r0:"";}
     if(!Array.isArray(c.cards))c.cards=[];
     if(!Array.isArray(c.contacts))c.contacts=[];
+    if(!Array.isArray(c.orders))c.orders=[];
+    c.orders.forEach(function(o){
+      if(!o.id)o.id=uid();
+      if(ORDER_STATUS.indexOf(o.status)<0)o.status="生產中";
+      if(!o.currency)o.currency="USD";
+      ["od","custDelivery","po","pn","qty","price","csNo","cpNo","pcNo","factoryDelivery","factory","shipDate","arNo","note"].forEach(function(k){if(o[k]==null)o[k]="";});
+      if(!o.createdAt)o.createdAt=o.od||todayISO();
+    });
     if(c.email&&!c.contacts.length){c.contacts.push({id:uid(),name:"",title:"",email:c.email,phone:"",note:""});}
     (c.projects||[]).forEach(function(p){
       p.partNumbers=p.partNumbers||"";p.isComplaint=!!p.isComplaint;p.followUpDate=p.followUpDate||p.dueDate||"";
@@ -460,16 +489,24 @@ function dashLists(){
     // 寄樣待追
     (p.samples||[]).forEach(function(s){if(s.status==="已寄出"||s.status==="客人已收")samples.push({c:x.c,p:p,s:s});});
   });
+  // 訂單交期倒數：生產中且交期(客)進入 lead 天內（或已過期）
+  var orderDue=[];
+  S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){
+    if(o.status!=="生產中"||!o.custDelivery)return;
+    var dd=daysSince(o.custDelivery);
+    if(dd>=-lead)orderDue.push({c:c,o:o,late:dd});
+  });});
   toChase.sort(function(a,b){return b.late-a.late;});
   holds.sort(function(a,b){return b.late-a.late;});
   deliveries.sort(function(a,b){return a.late-b.late;});
-  return {toChase:toChase,holds:holds,samples:samples,deliveries:deliveries};
+  orderDue.sort(function(a,b){return b.late-a.late;});
+  return {toChase:toChase,holds:holds,samples:samples,deliveries:deliveries,orderDue:orderDue};
 }
 
 /* ===================== 導覽列 ===================== */
-var NAV=[["dashboard","中控台"],["customers","客戶"],["board","看板"],["samples","寄樣"],["notes","小抄"],["vendors","廠商"],["weekly","週報"]];
+var NAV=[["dashboard","中控台"],["customers","客戶"],["orders","訂單"],["board","看板"],["samples","寄樣"],["notes","小抄"],["vendors","廠商"],["weekly","週報"]];
 function renderNav(){
-  var d=dashLists();var n=d.toChase.length+d.holds.length+d.samples.length+d.deliveries.length;
+  var d=dashLists();var n=d.toChase.length+d.holds.length+d.samples.length+d.deliveries.length+d.orderDue.length;
   document.getElementById("nav").innerHTML=NAV.map(function(t){
     var badge=t[0]==="dashboard"&&n?'<span class="b">'+n+'</span>':"";
     return '<button class="navbtn'+(S.view===t[0]?" on":"")+'" data-action="nav" data-view="'+t[0]+'">'+t[1]+badge+'</button>';
@@ -482,6 +519,7 @@ function render(){
   var v=S.view,h="";
   if(v==="dashboard")h=renderDash();
   else if(v==="customers")h=renderCustomers();
+  else if(v==="orders")h=renderOrders();
   else if(v==="detail")h=renderDetail();
   else if(v==="board")h=renderBoard();
   else if(v==="samples")h=renderSamples();
@@ -517,6 +555,16 @@ function renderDash(){
   if(d.deliveries.length)h+=dashSection("🚚 交期將至","下單後快要出貨 / 到期的",d.deliveries,function(x){
     var dd=daysSince(x.p.deliveryDate);
     return stickyCard(x.c,x.p,"r4",'<span class="late soft" style="background:var(--orl)">'+icon("truck",13)+'交期 '+esc(x.p.deliveryDate)+(dd>0?(" · 已過 "+dd+" 天"):(" · 還剩 "+(-dd)+" 天"))+'</span>');
+  });
+
+  if(d.orderDue.length)h+=dashSection("🧾 訂單交期倒數","生產中的訂單，客戶交期快到（或已過）",d.orderDue,function(x){
+    var dd=x.late;
+    var cnt=dd>0?("已過 "+dd+" 天"):(dd===0?"就是今天":("還剩 "+(-dd)+" 天"));
+    return '<button class="sticky r2" style="background:var(--pul)" data-action="open" data-id="'+x.c.id+'"><div class="tape"></div>'+
+      '<div class="st-top"><span class="st-cust">'+esc(x.c.name)+'</span><span class="chip" style="'+ORDER_STYLE[x.o.status]+'">'+esc(x.o.status)+'</span></div>'+
+      '<div class="st-subj">'+esc(x.o.pn||x.o.po||"（未填料號）")+(x.o.po?' · PO '+esc(x.o.po):"")+'</div>'+
+      '<div class="st-meta"><span class="late'+(dd>=0?"":" soft")+'">'+icon("truck",13)+'交期(客) '+esc(x.o.custDelivery)+' · '+cnt+'</span>'+
+      (x.o.qty?'<span>×'+esc(x.o.qty)+'</span>':"")+'</div></button>';
   });
 
   // 匯率小卡
@@ -573,6 +621,8 @@ function custCard(c){
      pill("進行中",active,"#7048e8")+pill("hold",held,"#f59f00")+pill("已下單",done,"#37b24d")+
      (complaint?'<span class="flag">客訴</span>':"")+
      (na.length?"":'<span class="cstat">尚無事項</span>')+'</div>';
+  var rev=revenueText(custRevenue(c));
+  if(rev)h+='<div class="row"><span class="revchip">'+icon("dollar",11)+'累積下單 '+rev+'</span></div>';
   h+='</button>';
   return h;
 }
@@ -601,6 +651,15 @@ function renderDetail(){
   if(c.relationship)h+='<div class="block"><div class="lbl">與 COMART 關係 / 策略</div><p>'+esc(c.relationship)+'</p></div>';
   if(notesForCust.length)h+='<div class="block"><div class="lbl">這個客戶的小抄</div><div class="grid" style="grid-template-columns:1fr;gap:10px;margin-top:6px">'+notesForCust.map(noteCard).join("")+'</div></div>';
   h+='</div>';
+
+  // 訂單（per-customer 清單 + 累積營收）
+  var orders=c.orders||[];
+  var rev=revenueText(custRevenue(c));
+  h+='<div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 class="sectitle" style="font-size:21px">訂單 <span class="count">'+orders.length+'</span>'+
+     (rev?' <span class="revchip">'+icon("dollar",12)+'累積下單 '+rev+'</span>':"")+'</h2>'+
+     '<button class="btn-dark" data-action="add-order">'+icon("plus",16)+' 新增訂單</button></div>';
+  if(!orders.length)h+='<div class="empty" style="padding:18px;margin-bottom:22px"><p style="margin:0">還沒有訂單。客人正式下單後點「新增訂單」記一筆。</p></div>';
+  else h+='<div style="margin-bottom:22px">'+ordersTable(orders.map(function(o){return {c:c,o:o};}),false)+'</div>';
 
   var active=(c.projects||[]).filter(function(p){return !p.archived;});
   var archived=(c.projects||[]).filter(function(p){return p.archived;});
@@ -744,6 +803,55 @@ function renderSamples(){
   return h;
 }
 
+/* ---------- 訂單總覽 ---------- */
+function renderOrders(){
+  var rows=[];S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){rows.push({c:c,o:o});});});
+  var list=rows.filter(function(r){return S.filter==="all"||r.o.status===S.filter;});
+  var h='<h2 class="sectitle">訂單 <span class="count">'+list.length+'</span></h2>'+
+    '<p class="subt">所有客戶的訂單集中在這，總金額＝數量×單價 自動算。新增請到客戶頁按「新增訂單」；這裡可直接改狀態。</p>';
+  var tabs=[["all","全部",rows.length]];
+  ORDER_STATUS.forEach(function(s){tabs.push([s,s,rows.filter(function(r){return r.o.status===s;}).length]);});
+  h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="cfilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
+  if(!list.length)return h+'<div class="empty"><div class="big">🧾</div><p>'+(rows.length?"這個狀態下沒有訂單。":"還沒有訂單。到客戶頁按「新增訂單」記第一筆。")+'</p></div>';
+  var by={};list.forEach(function(r){var cur=r.o.currency||"USD";by[cur]=(by[cur]||0)+orderAmount(r.o);});
+  var tot=revenueText(by);
+  if(tot)h+='<div class="row" style="margin:-4px 0 12px"><span class="revchip">'+icon("dollar",12)+(S.filter==="all"?"全部合計 ":"此狀態合計 ")+tot+'</span></div>';
+  h+=ordersTable(list,true);
+  return h;
+}
+/* rows: [{c,o}]；withCust=true 時多一欄客戶（總覽用） */
+function ordersTable(rows,withCust){
+  rows=rows.slice().sort(function(a,b){return (b.o.od||"").localeCompare(a.o.od||"");});
+  var h='<div class="otwrap"><table class="otable"><thead><tr><th>OD</th>'+(withCust?'<th>客戶</th>':"")+
+    '<th>交期(客)</th><th>PO#</th><th>料號</th><th class="num">數量</th><th class="num">單價</th><th class="num">總金額</th>'+
+    '<th>訂單單號</th><th>請購單號</th><th>採購單號</th><th>交期(廠)</th><th>工廠</th><th>出貨</th><th>應收單號</th><th>狀態</th><th>note</th><th></th></tr></thead><tbody>';
+  h+=rows.map(function(r){
+    var o=r.o,c=r.c;
+    var stSel='<select class="stage-sel" data-action="set-order-status" data-cid="'+c.id+'" data-oid="'+o.id+'" style="'+ORDER_STYLE[o.status]+'">'+
+      ORDER_STATUS.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
+    return '<tr><td>'+esc(o.od)+'</td>'+
+      (withCust?'<td><a href="#" data-action="open" data-id="'+c.id+'">'+esc(c.name)+'</a></td>':"")+
+      '<td>'+orderDueCell(o)+'</td><td>'+esc(o.po)+'</td><td style="font-family:monospace">'+esc(o.pn)+'</td>'+
+      '<td class="num">'+esc(o.qty)+'</td><td class="num">'+esc(o.price)+'</td>'+
+      '<td class="num" style="font-weight:700">'+esc(o.currency||"USD")+' '+fmtMoney(orderAmount(o))+'</td>'+
+      '<td>'+esc(o.csNo)+'</td><td>'+esc(o.cpNo)+'</td><td>'+esc(o.pcNo)+'</td>'+
+      '<td>'+esc(o.factoryDelivery)+'</td><td>'+esc(o.factory)+'</td><td>'+esc(o.shipDate)+'</td><td>'+esc(o.arNo)+'</td>'+
+      '<td>'+stSel+'</td><td style="white-space:normal;min-width:150px;max-width:260px">'+esc(o.note)+'</td>'+
+      '<td><div class="row" style="gap:0;flex-wrap:nowrap"><button class="iconmini" data-action="edit-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("pencil",13)+'</button>'+
+      '<button class="iconmini del" data-action="del-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("trash",13)+'</button></div></td></tr>';
+  }).join("");
+  return h+'</tbody></table></div>';
+}
+function orderDueCell(o){
+  if(!o.custDelivery)return "";
+  if(o.status!=="生產中")return esc(o.custDelivery);
+  var dd=daysSince(o.custDelivery);
+  if(dd>0)return '<span class="late">'+esc(o.custDelivery)+'（過 '+dd+' 天）</span>';
+  if(dd===0)return '<span class="late">'+esc(o.custDelivery)+'（今天）</span>';
+  if(dd>=-(S.data.settings.leadDays||7))return '<span class="late soft">'+esc(o.custDelivery)+'（剩 '+(-dd)+' 天）</span>';
+  return esc(o.custDelivery);
+}
+
 /* ---------- 小抄 ---------- */
 function renderNotes(){
   var q=S.query.trim().toLowerCase();
@@ -804,7 +912,8 @@ function genWeekly(){
   lines.push("");
   if(d.holds.length){lines.push("【hold 到期 "+d.holds.length+" 件】");d.holds.forEach(function(x){lines.push("・"+x.c.name+" — "+x.p.customerSubject);});lines.push("");}
   if(d.samples.length){lines.push("【寄樣待追 "+d.samples.length+" 件】");d.samples.forEach(function(x){lines.push("・"+x.c.name+" — "+(x.s.item||"樣品")+"（"+x.s.status+"）");});lines.push("");}
-  if(d.deliveries.length){lines.push("【交期將至 "+d.deliveries.length+" 件】");d.deliveries.forEach(function(x){lines.push("・"+x.c.name+" — "+x.p.customerSubject+"（交期 "+x.p.deliveryDate+"）");});}
+  if(d.deliveries.length){lines.push("【交期將至 "+d.deliveries.length+" 件】");d.deliveries.forEach(function(x){lines.push("・"+x.c.name+" — "+x.p.customerSubject+"（交期 "+x.p.deliveryDate+"）");});lines.push("");}
+  if(d.orderDue.length){lines.push("【訂單交期倒數 "+d.orderDue.length+" 筆】");d.orderDue.forEach(function(x){lines.push("・"+x.c.name+" — "+(x.o.pn||x.o.po||"訂單")+"（交期(客) "+x.o.custDelivery+"）");});}
   return lines.join("\n");
 }
 function renderWeekly(){
@@ -825,6 +934,7 @@ function renderModal(){
   else if(m.type==="update")b=updateModal(m.draft);
   else if(m.type==="quote")b=quoteModal(m.draft);
   else if(m.type==="sample")b=sampleModal(m.draft);
+  else if(m.type==="order")b=orderModal(m.draft);
   else if(m.type==="note")b=noteModal(m.draft);
   else if(m.type==="vendor")b=vendorModal(m.draft);
   else if(m.type==="hold")b=holdModal(m.draft);
@@ -899,6 +1009,21 @@ function sampleModal(d){
     fld("客人回饋",'<textarea class="inp" id="s_fb" rows="2">'+esc(d.feedback)+'</textarea>');
   return shell(d.id?"編輯寄樣":"加寄樣",body,d.id?"儲存":"新增");
 }
+function orderModal(d){
+  d=d||{status:"生產中",currency:"USD"};
+  var stSel='<select class="inp" id="o_status">'+ORDER_STATUS.map(function(s){return '<option'+((d.status||"生產中")===s?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
+  var curSel='<select class="inp" id="o_cur">'+ORDER_CURRENCIES.map(function(x){return '<option'+((d.currency||"USD")===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
+  var body='<div class="two">'+fld("下單日 OD",'<input class="inp" type="date" id="o_od" value="'+esc(d.od||todayISO())+'">')+fld("交期(客)",'<input class="inp" type="date" id="o_cd" value="'+esc(d.custDelivery)+'">')+'</div>'+
+    '<div class="two">'+fld("PO#",'<input class="inp" id="o_po" value="'+esc(d.po)+'">')+fld("料號",'<input class="inp" id="o_pn" value="'+esc(d.pn)+'" placeholder="S6GL000006">')+'</div>'+
+    '<div class="three">'+fld("數量",'<input class="inp" id="o_qty" inputmode="decimal" value="'+esc(d.qty)+'">')+fld("單價",'<input class="inp" id="o_price" inputmode="decimal" value="'+esc(d.price)+'">')+fld("幣別",curSel)+'</div>'+
+    '<div class="muted" style="font-size:13px;margin-top:-6px">總金額（自動算）：<b id="o_amt" style="color:#2f9e44">'+fmtMoney(orderAmount(d))+'</b></div>'+
+    '<div class="three">'+fld("訂單單號",'<input class="inp" id="o_cs" value="'+esc(d.csNo)+'" placeholder="CS302-xxx">')+fld("請購單號",'<input class="inp" id="o_cp" value="'+esc(d.cpNo)+'" placeholder="CP012-xxx">')+fld("採購單號",'<input class="inp" id="o_pc" value="'+esc(d.pcNo)+'" placeholder="PC233-xxx">')+'</div>'+
+    '<div class="two">'+fld("交期(廠)",'<input class="inp" type="date" id="o_fd" value="'+esc(d.factoryDelivery)+'">')+fld("工廠",'<input class="inp" id="o_factory" value="'+esc(d.factory)+'">')+'</div>'+
+    '<div class="two">'+fld("出貨日",'<input class="inp" type="date" id="o_ship" value="'+esc(d.shipDate)+'">')+fld("應收單號",'<input class="inp" id="o_ar" value="'+esc(d.arNo)+'">')+'</div>'+
+    fld("狀態",stSel)+
+    fld("note",'<textarea class="inp" id="o_note" rows="2">'+esc(d.note)+'</textarea>');
+  return shell(d.id?"編輯訂單":"新增訂單",body,d.id?"儲存":"新增");
+}
 function noteModal(d){
   d=d||{tags:[],images:[],scope:"company"};
   var cats=S.data.categories;
@@ -949,6 +1074,7 @@ function readModal(){
   else if(m.type==="update")Object.assign(d,{date:rv("u_date"),note:rv("u_note"),thread:(document.getElementById("u_thread")?rv("u_thread"):(d.thread||""))});
   else if(m.type==="quote")Object.assign(d,{product:rv("q_prod"),currency:rv("q_cur"),quoteDate:rv("q_date"),validUntil:rv("q_valid"),note:rv("q_note")});
   else if(m.type==="sample")Object.assign(d,{item:rv("s_item"),qty:rv("s_qty"),shipDate:rv("s_ship"),status:rv("s_status"),courier:rv("s_courier"),tracking:rv("s_track"),feeType:rv("s_fee"),feeStatus:rv("s_feest"),feeCustom:rv("s_feecustom"),feedback:rv("s_fb")});
+  else if(m.type==="order")Object.assign(d,{od:rv("o_od"),custDelivery:rv("o_cd"),po:rv("o_po"),pn:rv("o_pn"),qty:rv("o_qty"),price:rv("o_price"),currency:rv("o_cur"),csNo:rv("o_cs"),cpNo:rv("o_cp"),pcNo:rv("o_pc"),factoryDelivery:rv("o_fd"),factory:rv("o_factory"),shipDate:rv("o_ship"),arNo:rv("o_ar"),status:rv("o_status"),note:rv("o_note")});
   else if(m.type==="note")Object.assign(d,{title:rv("n_title"),content:rv("n_content"),scope:rv("n_scope")});
   else if(m.type==="vendor")Object.assign(d,{name:rv("v_name"),type:rv("v_type"),note:rv("v_note")});
   else if(m.type==="exchange")Object.assign(d,{text:rv("x_text"),date:rv("x_date")});
@@ -971,7 +1097,7 @@ document.addEventListener("click",function(e){
 
   if(a==="add"||a==="add-customer-top"){S.modal={type:"customer",draft:{status:(S.filter!=="all"?S.filter:"潛在客戶"),contacts:[]}};renderModal();return;}
   if(a==="edit-customer"){S.modal={type:"customer",draft:JSON.parse(JSON.stringify(C()))};renderModal();return;}
-  if(a==="delete-customer"){if(confirm('刪除客戶「'+C().name+'」及其所有事項？無法復原。')){S.data.customers=S.data.customers.filter(function(x){return x.id!==S.selectedId;});S.view="customers";save();render();}return;}
+  if(a==="delete-customer"){if(confirm('刪除客戶「'+C().name+'」及其所有事項與訂單？無法復原。')){S.data.customers=S.data.customers.filter(function(x){return x.id!==S.selectedId;});S.view="customers";save();render();}return;}
 
   if(a==="add-project"){S.modal={type:"project",customerId:S.selectedId,draft:{}};renderModal();return;}
   if(a==="edit-project"){S.modal={type:"project",customerId:S.selectedId,draft:JSON.parse(JSON.stringify(P()))};renderModal();return;}
@@ -988,6 +1114,10 @@ document.addEventListener("click",function(e){
   if(a==="add-sample"){S.modal={type:"sample",customerId:S.selectedId,projectId:pid,draft:{status:"待寄",feeType:"不收費"}};renderModal();return;}
   if(a==="edit-sample"){var ps=P();var sm=ps.samples.filter(function(s){return s.id===t.getAttribute("data-sid");})[0];S.modal={type:"sample",customerId:S.selectedId,projectId:pid,draft:JSON.parse(JSON.stringify(sm))};renderModal();return;}
   if(a==="del-sample"){var p4=P();p4.samples=p4.samples.filter(function(s){return s.id!==t.getAttribute("data-sid");});save();render();return;}
+
+  if(a==="add-order"){S.modal={type:"order",customerId:S.selectedId,draft:{status:"生產中",currency:"USD",od:todayISO()}};renderModal();return;}
+  if(a==="edit-order"){var ocid=t.getAttribute("data-cid")||S.selectedId;var oc=getC(ocid);var oo=(oc.orders||[]).filter(function(o){return o.id===t.getAttribute("data-oid");})[0];if(oo){S.modal={type:"order",customerId:ocid,draft:JSON.parse(JSON.stringify(oo))};renderModal();}return;}
+  if(a==="del-order"){if(confirm("刪除這筆訂單？無法復原。")){var dc=getC(t.getAttribute("data-cid")||S.selectedId);dc.orders=(dc.orders||[]).filter(function(o){return o.id!==t.getAttribute("data-oid");});save();render();}return;}
 
   if(a==="hold"){S.modal={type:"hold",customerId:S.selectedId,projectId:pid,draft:{}};renderModal();return;}
   if(a==="hold-pick"){var dd=t.getAttribute("data-d");doHold(parseInt(dd,10),null);return;}
@@ -1032,6 +1162,9 @@ document.addEventListener("click",function(e){
 document.addEventListener("change",function(e){
   var t=e.target.closest("[data-action='set-stage']");
   if(t){var pid=t.getAttribute("data-pid");var c=getC(S.selectedId);var p=c.projects.filter(function(x){return x.id===pid;})[0];p.stage=t.value;save();render();return;}
+  var os=e.target.closest("[data-action='set-order-status']");
+  if(os){var oc2=getC(os.getAttribute("data-cid"));var o2=oc2&&(oc2.orders||[]).filter(function(o){return o.id===os.getAttribute("data-oid");})[0];
+    if(o2){o2.status=os.value;if(os.value==="已出貨"&&!o2.shipDate)o2.shipDate=todayISO();save();render();}return;}
   if(e.target.id==="n_img"){handleImageUpload(e.target.files,"images");return;}
   if(e.target.id==="c_card"){handleImageUpload(e.target.files,"cards");return;}
   if(e.target.id==="c_status"&&e.target.value==="__custom__"){
@@ -1076,6 +1209,7 @@ function saveModal(){
   else if(m.type==="update"){if(!(d.note||"").trim()){alert("請輸入備註。");return;}var pu=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];pu.updates.push({id:uid(),date:d.date||todayISO(),note:d.note,emails:d.emails||[],thread:d.thread||""});}
   else if(m.type==="quote"){var pq=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];pq.quotes.push({id:uid(),product:d.product,currency:d.currency,tiers:d.tiers||[],quoteDate:d.quoteDate,validUntil:d.validUntil,note:d.note,createdAt:todayISO()});}
   else if(m.type==="sample"){var psm=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];if(d.id){var k=-1;psm.samples.forEach(function(s,ix){if(s.id===d.id)k=ix;});if(k>=0)psm.samples[k]=Object.assign(psm.samples[k],d);}else psm.samples.push(Object.assign({id:uid(),createdAt:todayISO()},d));}
+  else if(m.type==="order"){if(!(d.pn||"").trim()&&!(d.po||"").trim()){alert("請至少填 PO# 或料號。");return;}var co=getC(m.customerId);if(!Array.isArray(co.orders))co.orders=[];if(d.id){var oi=-1;co.orders.forEach(function(o,ix){if(o.id===d.id)oi=ix;});if(oi>=0)co.orders[oi]=Object.assign(co.orders[oi],d);}else co.orders.unshift(Object.assign({id:uid(),createdAt:todayISO()},d));}
   else if(m.type==="note"){if(!(d.content||"").trim()&&!(d.title||"").trim()&&!(d.images||[]).length){alert("筆記不能空白。");return;}if(d.id){var ni=-1;S.data.notes.forEach(function(n,ix){if(n.id===d.id)ni=ix;});if(ni>=0)S.data.notes[ni]=Object.assign(S.data.notes[ni],d);}else S.data.notes.unshift(Object.assign({id:uid(),createdAt:todayISO(),tags:[],images:[]},d));}
   else if(m.type==="vendor"){if(!(d.name||"").trim()){alert("請輸入廠商名稱。");return;}if(d.id){var vi=-1;S.data.vendors.forEach(function(v,ix){if(v.id===d.id)vi=ix;});if(vi>=0)S.data.vendors[vi]=Object.assign(S.data.vendors[vi],d);}else S.data.vendors.unshift(Object.assign({id:uid(),createdAt:todayISO(),contacts:[]},d));}
   else if(m.type==="hold"){var hd=rv("hold_date");if(hd){doHold(null,hd);return;}else{alert("請選一個提醒時間或日期。");return;}}
@@ -1087,6 +1221,7 @@ function saveModal(){
 /* hold 自訂日期：select 後關閉 picker，等按確定。改為按鈕直接套用 */
 document.addEventListener("input",function(e){
   if(e.target.id==="hold_date"){/* 等使用者按確定 */}
+  if(e.target.id==="o_qty"||e.target.id==="o_price"){var el=document.getElementById("o_amt");if(el)el.textContent=fmtMoney(num(rv("o_qty"))*num(rv("o_price")));}
 });
 
 /* 拖拉：看板換階段 + 客戶卡片排序 */
@@ -1131,6 +1266,7 @@ function toggleMenu(){
   pop.innerHTML='<button data-m="jexport">'+icon("box",15)+' 匯出備份 (JSON)</button>'+
     '<button data-m="jimport">'+icon("box",15)+' 匯入備份</button>'+
     '<button data-m="csv">'+icon("copy",15)+' 匯出 Excel (CSV)</button>'+
+    '<button data-m="ocsv">'+icon("dollar",15)+' 匯出訂單 (CSV)</button>'+
     '<button data-m="weekly">'+icon("pencil",15)+' 週報摘要</button>';
   pop.style.display="block";
   pop.querySelectorAll("button").forEach(function(b){b.onclick=function(){pop.style.display="none";menuAct(b.getAttribute("data-m"));};});
@@ -1139,6 +1275,7 @@ function menuAct(m){
   if(m==="jexport"){var blob=new Blob([JSON.stringify(S.data,null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="comart-crm-"+todayISO()+".json";a.click();}
   else if(m==="jimport"){var inp=document.createElement("input");inp.type="file";inp.accept="application/json";inp.onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){try{var o=JSON.parse(ev.target.result);if(o&&Array.isArray(o.customers)){S.data=normalize(o);save();S.view="dashboard";render();}else alert("格式不符。");}catch(x){alert("無法讀取。");}};r.readAsText(f);};inp.click();}
   else if(m==="csv")exportCSV();
+  else if(m==="ocsv")exportOrdersCSV();
   else if(m==="weekly"){S.view="weekly";render();}
 }
 function exportCSV(){
@@ -1146,8 +1283,18 @@ function exportCSV(){
   S.data.customers.forEach(function(c){(c.projects||[]).forEach(function(p){
     rows.push([c.name,c.status||"",c.rating,p.customerSubject,factoryText(p),p.partNumbers,p.archived?"已結案":p.stage,p.isComplaint?"是":"",p.followUpDate,p.deliveryDate,p.hold?p.hold.wakeDate:"",lastUpd(p)||"",(p.updates&&p.updates.length?p.updates[p.updates.length-1].note:"")]);
   });});
+  downloadCSV(rows,"comart-"+todayISO()+".csv");
+}
+function downloadCSV(rows,filename){
   var csv="\uFEFF"+rows.map(function(r){return r.map(function(x){return '"'+String(x==null?"":x).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
-  var blob=new Blob([csv],{type:"text/csv"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="comart-"+todayISO()+".csv";a.click();
+  var blob=new Blob([csv],{type:"text/csv"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+}
+function exportOrdersCSV(){
+  var rows=[["OD","\u5BA2\u6236","\u4EA4\u671F(\u5BA2)","PO#","\u6599\u865F","\u6578\u91CF","\u55AE\u50F9","\u5E63\u5225","\u7E3D\u91D1\u984D","\u8A02\u55AE\u55AE\u865F","\u8ACB\u8CFC\u55AE\u865F","\u63A1\u8CFC\u55AE\u865F","\u4EA4\u671F(\u5EE0)","\u5DE5\u5EE0","\u51FA\u8CA8","\u61C9\u6536\u55AE\u865F","\u72C0\u614B","note"]];
+  S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){
+    rows.push([o.od,c.name,o.custDelivery,o.po,o.pn,o.qty,o.price,o.currency||"USD",orderAmount(o),o.csNo,o.cpNo,o.pcNo,o.factoryDelivery,o.factory,o.shipDate,o.arNo,o.status,o.note]);
+  });});
+  downloadCSV(rows,"comart-orders-"+todayISO()+".csv");
 }
 
 /* 全域搜尋 */
@@ -1174,6 +1321,8 @@ function searchRender(q){
   if(custs.length){h+='<div class="sgrp">客戶</div>'+custs.slice(0,6).map(function(c){return '<button class="sitem" data-go="'+c.id+'"><div class="t">'+esc(c.name)+'</div><div class="s">'+esc(c.type||"")+'</div></button>';}).join("");}
   var projs=[];S.data.customers.forEach(function(c){(c.projects||[]).forEach(function(p){var blob=((p.customerSubject||"")+" "+factoryText(p)+" "+(p.partNumbers||"")+" "+(p.updates||[]).map(function(u){return u.note;}).join(" ")).toLowerCase();if(blob.indexOf(q)>=0)projs.push({c:c,p:p});});});
   if(projs.length){h+='<div class="sgrp">事項 / 進度 / 料號</div>'+projs.slice(0,8).map(function(x){return '<button class="sitem" data-go="'+x.c.id+'"><div class="t">'+esc(x.p.customerSubject)+'</div><div class="s">'+esc(x.c.name)+(x.p.partNumbers?' · '+esc(x.p.partNumbers):"")+'</div></button>';}).join("");}
+  var ords=[];S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){var blob=((o.po||"")+" "+(o.pn||"")+" "+(o.csNo||"")+" "+(o.cpNo||"")+" "+(o.pcNo||"")+" "+(o.arNo||"")+" "+(o.factory||"")+" "+(o.note||"")).toLowerCase();if(blob.indexOf(q)>=0)ords.push({c:c,o:o});});});
+  if(ords.length){h+='<div class="sgrp">訂單</div>'+ords.slice(0,6).map(function(x){return '<button class="sitem" data-go="'+x.c.id+'"><div class="t">'+esc(x.o.pn||x.o.po||"（訂單）")+(x.o.po?' · PO '+esc(x.o.po):"")+'</div><div class="s">'+esc(x.c.name)+(x.o.csNo?' · '+esc(x.o.csNo):"")+' · '+esc(x.o.status)+'</div></button>';}).join("");}
   var notes=S.data.notes.filter(function(n){return ((n.title||"")+" "+(n.content||"")+" "+(n.tags||[]).join(" ")).toLowerCase().indexOf(q)>=0;});
   if(notes.length){h+='<div class="sgrp">小抄</div>'+notes.slice(0,5).map(function(n){return '<button class="sitem" data-gov="notes"><div class="t">'+esc(n.title||"（無標題筆記）")+'</div><div class="s">'+esc((n.content||"").slice(0,40))+'</div></button>';}).join("");}
   var vends=S.data.vendors.filter(function(v){return (v.name+" "+(v.note||"")+" "+(v.contacts||[]).map(function(p){return p.name+p.note;}).join(" ")).toLowerCase().indexOf(q)>=0;});
