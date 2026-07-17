@@ -736,7 +736,7 @@ function renderDash(){
   });
   if(d.holds.length)h+=dashList("💤 hold 到期","先放著的時間到了，要追嗎",d.holds,"#C08A2A",false,function(x){
     return {c:x.c,pid:x.p.id,subj:x.p.customerSubject,complaint:x.p.isComplaint,reason:'<span class="rz" style="color:#C07A2E">'+icon("zzz",12)+' 到期'+(x.late>0?(" · 已 "+x.late+" 天"):"")+'</span>'};
-  });
+  },"holds");
   if(d.samples.length)h+=dashList("📦 寄樣待追","寄出還沒收到回饋",d.samples,"#4C86C0",false,function(x){
     return {c:x.c,subj:(x.s.item||"樣品")+(x.s.shipDate?(" · 寄出 "+x.s.shipDate):""),complaint:false,reason:'<span class="chip" style="'+(SAMPLE_STYLE[x.s.status]||"background:#EEE;color:#666")+'">'+esc(x.s.status)+'</span>'};
   });
@@ -757,13 +757,15 @@ function renderDash(){
     (S.data.exchange.updatedAt?'<div class="muted" style="font-size:11px;margin-top:6px">更新：'+esc(S.data.exchange.updatedAt)+'</div>':"")+'</div></section>';
   return h;
 }
-function dashList(title,sub,list,accent,alwaysShow,fn){
+function dashList(title,sub,list,accent,alwaysShow,fn,mode){
   var h='<section style="margin-top:22px"><h3 class="sectitle" style="font-size:19px">'+title+' <span class="count">'+list.length+'</span></h3><p class="subt">'+sub+'</p>';
   if(!list.length){h+='<div class="dnone">✓ 目前沒有</div>';return h+'</section>';}
   h+='<div class="dlist">'+list.map(function(x){var r=fn(x);
     var acts=r.pid?('<div class="dacts">'+
       '<button class="dact" data-action="dash-note" data-cid="'+r.c.id+'" data-pid="'+r.pid+'" title="記一筆進度（處理掉）">✓ 記一筆</button>'+
-      '<button class="dact" data-action="dash-hold" data-cid="'+r.c.id+'" data-pid="'+r.pid+'" title="先 hold 著">💤</button>'+
+      (mode==="holds"
+        ?'<button class="dact" data-action="dash-unhold" data-cid="'+r.c.id+'" data-pid="'+r.pid+'" title="取消 hold，恢復追蹤">✕ 取消 hold</button>'
+        :'<button class="dact" data-action="dash-hold" data-cid="'+r.c.id+'" data-pid="'+r.pid+'" title="先 hold 著">💤</button>')+
       '</div>'):"";
     return '<div class="drow" data-action="open" data-id="'+r.c.id+'" role="button" tabindex="0"><span class="dbar" style="background:'+accent+'"></span>'+
       '<div class="dmain"><div class="dcust">'+esc(r.c.name)+(r.complaint?' <span class="flag">客訴</span>':"")+'</div><div class="dsubj">'+esc(r.subj||"（未命名）")+'</div></div>'+
@@ -947,6 +949,7 @@ function projBody(p,st){
     h+='</div>';
     h+='<div class="wholebar"><span class="slbl">整筆</span>';
     h+='<button class="act-chip2" data-action="hold" data-pid="'+p.id+'">'+icon("zzz",13)+(p.hold?(' hold 到 '+esc(p.hold.wakeDate)+'（改期）'):' 先 hold 著')+'</button>';
+    if(p.hold)h+='<button class="flagtoggle sm" data-action="unhold" data-pid="'+p.id+'">✕ 取消 hold</button>';
     h+=p.archived?'<button class="act-chip2" data-action="unarchive" data-pid="'+p.id+'">還原</button>':'<button class="act-chip2" data-action="archive" data-pid="'+p.id+'">結案</button>';
     h+='<button class="flagtoggle sm'+(p.isComplaint?" on":"")+'" data-action="toggle-complaint" data-pid="'+p.id+'">'+(p.isComplaint?"● 客訴":"標客訴")+'</button>';
     h+='</div>';
@@ -965,7 +968,8 @@ function projBody(p,st){
   }
   if(p.partNumbers){h+='<div class="lblrow" style="margin-top:11px">'+icon("tag",12)+'料號 / BOM</div><div class="fsubj" style="font-family:monospace;font-size:13px">'+esc(p.partNumbers)+'</div>';}
   var info="";
-  if(!threaded&&p.hold)info+='<button class="chip act-chip" data-action="hold" data-pid="'+p.id+'" style="background:var(--orl);color:#8F681A">'+icon("clock",12)+'hold 到 '+esc(p.hold.wakeDate)+'（改期）</button>';
+  if(!threaded&&p.hold)info+='<button class="chip act-chip" data-action="hold" data-pid="'+p.id+'" style="background:var(--orl);color:#8F681A">'+icon("clock",12)+'hold 到 '+esc(p.hold.wakeDate)+'（改期）</button>'+
+    '<button class="chip act-chip" data-action="unhold" data-pid="'+p.id+'" style="background:#fff;color:#C23A55;border:1.5px solid #F2D7DD">✕ 取消 hold</button>';
   if(p.followUpDate)info+='<span class="chip" style="background:var(--pkl);color:#C23A55">'+icon("bell",12)+'跟進 '+esc(p.followUpDate)+'</span>';
   if(p.deliveryDate)info+='<span class="chip" style="background:var(--orl);color:#8F681A">'+icon("truck",12)+'交期 '+esc(p.deliveryDate)+'</span>';
   if(info)h+='<div class="row" style="margin-top:9px">'+info+'</div>';
@@ -1631,6 +1635,7 @@ document.addEventListener("click",function(e){
   if(a==="undo"){if(S.toast&&S.toast.restore)S.toast.restore();clearTimeout(S.toastTimer);S.toast=null;save();render();renderToast();return;}
   if(a==="dash-note"){var dc=getC(t.getAttribute("data-cid"));var dp=dc.projects.filter(function(x){return x.id===t.getAttribute("data-pid");})[0];if(dp.hold){dp.hold.history.push({type:"wake",date:todayISO()});dp.hold=null;save();}S.modal={type:"update",customerId:dc.id,projectId:dp.id,draft:{date:todayISO(),emails:[],thread:((dp.factorySubjects||[])[0]||{}).id||""}};renderModal();return;}
   if(a==="dash-hold"){S.modal={type:"hold",customerId:t.getAttribute("data-cid"),projectId:t.getAttribute("data-pid"),draft:{}};renderModal();return;}
+  if(a==="dash-unhold"){var duc=getC(t.getAttribute("data-cid"));var dup=duc.projects.filter(function(x){return x.id===t.getAttribute("data-pid");})[0];if(dup&&dup.hold){var savedHold=dup.hold;dup.hold=null;touch(dup);save();render();showToast('已取消 hold「'+(dup.customerSubject||"")+'」',function(){dup.hold=savedHold;});}return;}
 
   if(a==="add"||a==="add-customer-top"){S.modal={type:"customer",draft:{status:(S.filter!=="all"?S.filter:"潛在客戶"),contacts:[]}};renderModal();return;}
   if(a==="edit-customer"){S.modal={type:"customer",draft:JSON.parse(JSON.stringify(C()))};renderModal();return;}
@@ -1658,6 +1663,7 @@ document.addEventListener("click",function(e){
   if(a==="del-order"){var docid=t.getAttribute("data-cid")||S.selectedId;var darr=getC(docid).orders,doo=darr.filter(function(o){return o.id===t.getAttribute("data-oid");})[0],oi=darr.indexOf(doo);softDelete("已刪除一筆訂單",function(){darr.splice(oi,1);},function(){darr.splice(Math.min(oi,darr.length),0,doo);});return;}
 
   if(a==="hold"){S.modal={type:"hold",customerId:S.selectedId,projectId:pid,draft:{}};renderModal();return;}
+  if(a==="unhold"){var puh=P();if(puh&&puh.hold){var savedHold2=puh.hold;puh.hold=null;touch(puh);save();render();showToast('已取消 hold「'+(puh.customerSubject||"")+'」',function(){puh.hold=savedHold2;});}return;}
   if(a==="hold-pick"){var dd=t.getAttribute("data-d");doHold(parseInt(dd,10),null);return;}
   if(a==="wake-chase"){var pw=P();if(pw.hold){pw.hold.history.push({type:"wake",date:todayISO()});pw.hold=null;}touch(pw);S.modal={type:"update",customerId:S.selectedId,projectId:pid,draft:{date:todayISO(),emails:[]}};save();renderModal();render();return;}
   if(a==="archive"){var pa=P();pa.archived=true;pa.archivedAt=todayISO();pa.hold=null;touch(pa);save();render();showToast('已結案「'+(pa.customerSubject||"")+'」',function(){pa.archived=false;});return;}
