@@ -347,13 +347,27 @@ textarea.inp{resize:vertical}
 .exch{font-size:13.5px;white-space:pre-wrap;line-height:1.6;color:#3f3b52}
 
 /* orders */
-.otwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px rgba(90,70,80,.06)}
-.otable{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1080px}
-.otable th{background:#FAFAF9;font-size:11px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-.otable td{padding:7px 10px;border-bottom:1px solid #F1F1EE;white-space:nowrap;vertical-align:top}
-.otable tr:last-child td{border-bottom:none}
-.otable tbody tr:hover td{background:#FBFBF9}
-.otable .num{text-align:right;font-variant-numeric:tabular-nums}
+.ocard{background:rgba(255,255,255,.62);backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15);border:1px solid rgba(255,255,255,.75);border-radius:16px;padding:14px 16px;box-shadow:0 2px 10px rgba(90,70,80,.06)}
+.olist{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ohead{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ohead .amt{margin-left:auto;font-weight:800;font-size:15px;color:#357B50;white-space:nowrap;font-variant-numeric:tabular-nums}
+.okv{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:#6b6680;margin-top:9px}
+.okv b{color:var(--ink);font-weight:600}
+.oitems{border-collapse:collapse;font-size:12.5px;margin-top:9px;min-width:min(100%,340px)}
+.oitems th{font-size:11px;color:var(--muted);text-align:left;padding:2px 18px 4px 0;border-bottom:1px solid var(--line);font-weight:600;white-space:nowrap}
+.oitems td{padding:4px 18px 4px 0;border-bottom:1px dashed #EDEDEA;font-variant-numeric:tabular-nums}
+.oitems tr:last-child td{border-bottom:none}
+.sopwrap{margin-top:11px;border-top:1px dashed var(--line);padding-top:9px}
+.soprow{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+.soprow .stext{flex:1;min-width:0}
+.soprow.done .stext{color:#9b96aa;text-decoration:line-through}
+.soprow .iconmini{opacity:0;padding:3px}
+.soprow:hover .iconmini{opacity:1}
+.sopchk{flex:none;width:19px;height:19px;border-radius:999px;border:2px solid #CBD0DA;color:#fff;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;background:#fff;transition:transform .12s,background .18s,border-color .18s}
+.sopchk:hover{border-color:#3E8A5C}.sopchk:active{transform:scale(.9)}
+.sopchk.on{background:#3E8A5C;border-color:#3E8A5C;animation:pop .25s ease}
+.sopprog{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;background:#f1efe7;color:#6b6680}
+.sopprog.ok{background:var(--grl);color:#357B50}
 .revchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--grl);color:#357B50}
 /* ===== 報價單 ===== */
 .qitem{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;background:rgba(255,255,255,.55)}
@@ -580,6 +594,7 @@ function lastUpdRaw(p){if(!p.updates||!p.updates.length)return null;return p.upd
 function normalize(d){
   d.version=2;
   d.settings=Object.assign({staleDays:7,leadDays:14},d.settings||{});if(d.settings.leadDays===7)d.settings.leadDays=14;
+  if(!Array.isArray(d.settings.orderSop)||!d.settings.orderSop.length)d.settings.orderSop=["寄 PI 給客人","發信通知工廠下單","提供嘜頭給工廠"];
   if(!Array.isArray(d.statuses))d.statuses=DEFAULT_STATUSES.slice();
   if(!d.exchange)d.exchange={text:"",updatedAt:""};
   if(!Array.isArray(d.categories))d.categories=DEFAULT_CATS.slice();
@@ -610,6 +625,8 @@ function normalize(d){
       if(!Array.isArray(o.items)||!o.items.length)o.items=[{id:uid(),pn:o.pn||"",qty:o.qty||"",price:o.price||""}];
       o.items.forEach(function(it){if(!it.id)it.id=uid();["pn","qty","price"].forEach(function(k){if(it[k]==null)it[k]="";});});
       o.pn=o.items.map(function(it){return (it.pn||"").trim();}).filter(Boolean).join(", ");
+      if(!Array.isArray(o.sop))o.sop=d.settings.orderSop.map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};});
+      o.sop.forEach(function(s){if(!s.id)s.id=uid();if(s.done==null)s.done=false;if(s.doneAt==null)s.doneAt="";});
       if(!o.createdAt)o.createdAt=o.od||todayISO();
     });
     if(c.email&&!c.contacts.length){c.contacts.push({id:uid(),name:"",title:"",email:c.email,phone:"",note:""});}
@@ -887,7 +904,7 @@ function renderDetail(){
   h+='<div class="panel" style="margin-bottom:22px;padding:14px 20px"><div class="row" style="justify-content:space-between;align-items:center"><b>🧾 訂單 <span class="count">'+orders.length+'</span></b>'+
      (crev2?'<span class="revchip">'+icon("dollar",12)+'累積下單 '+crev2+'</span>':"")+
      '<button class="btn-soft" data-action="add-order" style="padding:6px 12px">＋ 新增訂單</button></div>';
-  if(orders.length)h+='<div style="margin-top:10px">'+ordersTable(orders.map(function(o){return {c:c,o:o};}),false)+'</div>';
+  if(orders.length)h+=ordersList(orders.map(function(o){return {c:c,o:o};}),false);
   else h+='<p class="muted" style="font-size:13px;margin:8px 0 0">還沒有訂單，客人正式下單後點「新增訂單」記一筆。</p>';
   h+='</div>';
 
@@ -1101,8 +1118,9 @@ function renderSamples(){
 function renderOrders(){
   var rows=[];S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){rows.push({c:c,o:o});});});
   var list=rows.filter(function(r){return S.filter==="all"||r.o.status===S.filter;});
-  var h='<h2 class="sectitle">訂單 <span class="count">'+list.length+'</span></h2>'+
-    '<p class="subt">所有客戶的訂單集中在這，總金額＝數量×單價 自動算。新增請到客戶頁按「新增訂單」；這裡可直接改狀態。</p>';
+  var h='<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h2 class="sectitle">訂單 <span class="count">'+list.length+'</span></h2>'+
+    '<p class="subt">所有客戶的訂單集中在這，總金額＝各品項 數量×單價 加總。新增請到客戶頁按「新增訂單」；這裡可直接改狀態、勾 SOP。</p></div>'+
+    '<button class="btn-soft" data-action="sop-template" style="padding:7px 14px;flex:none">⚙ SOP 範本</button></div>';
   var tabs=[["all","全部",rows.length]];
   ORDER_STATUS.forEach(function(s){tabs.push([s,s,rows.filter(function(r){return r.o.status===s;}).length]);});
   h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="ofilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
@@ -1110,35 +1128,52 @@ function renderOrders(){
   var by={};list.forEach(function(r){var cur=r.o.currency||"USD";by[cur]=(by[cur]||0)+orderAmount(r.o);});
   var tot=revenueText(by);
   if(tot)h+='<div class="row" style="margin:-4px 0 12px"><span class="revchip">'+icon("dollar",12)+(S.filter==="all"?"全部合計 ":"此狀態合計 ")+tot+'</span></div>';
-  h+=ordersTable(list,true);
+  h+=ordersList(list,true);
   return h;
 }
-/* rows: [{c,o}]；withCust=true 時多一欄客戶（總覽用） */
-function ordersTable(rows,withCust){
+/* rows: [{c,o}]；withCust=true 時顯示客戶名（總覽用） */
+function ordersList(rows,withCust){
   rows=rows.slice().sort(function(a,b){return (b.o.od||"").localeCompare(a.o.od||"");});
-  var h='<div class="otwrap"><table class="otable"><thead><tr><th>OD</th>'+(withCust?'<th>客戶</th>':"")+
-    '<th>交期(客)</th><th>PO#</th><th>料號</th><th class="num">數量</th><th class="num">單價</th><th class="num">總金額</th>'+
-    '<th>訂單單號</th><th>請購單號</th><th>採購單號</th><th>交期(廠)</th><th>工廠</th><th>出貨</th><th>應收單號</th><th>狀態</th><th>note</th><th></th></tr></thead><tbody>';
-  h+=rows.map(function(r){
-    var o=r.o,c=r.c;
-    var its=orderItems(o);
-    var pnCell=its.map(function(it){return esc(it.pn)||'<span style="color:#c3bcac">—</span>';}).join("<br>");
-    var qtyCell=its.map(function(it){return esc(it.qty)||"&nbsp;";}).join("<br>");
-    var prCell=its.map(function(it){return esc(it.price)||"&nbsp;";}).join("<br>");
-    var stSel='<select class="statussel sm" data-action="set-order-status" data-cid="'+c.id+'" data-oid="'+o.id+'" style="'+ORDER_STYLE[o.status]+'">'+
-      ORDER_STATUS.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
-    return '<tr><td>'+esc(o.od)+'</td>'+
-      (withCust?'<td><a href="#" data-action="open" data-id="'+c.id+'">'+esc(c.name)+'</a></td>':"")+
-      '<td>'+orderDueCell(o)+'</td><td>'+esc(o.po)+'</td><td style="font-family:monospace">'+pnCell+'</td>'+
-      '<td class="num">'+qtyCell+'</td><td class="num">'+prCell+'</td>'+
-      '<td class="num" style="font-weight:700">'+esc(o.currency||"USD")+' '+fmtMoney(orderAmount(o))+'</td>'+
-      '<td>'+esc(o.csNo)+'</td><td>'+esc(o.cpNo)+'</td><td>'+esc(o.pcNo)+'</td>'+
-      '<td>'+esc(o.factoryDelivery)+'</td><td>'+esc(o.factory)+'</td><td>'+esc(o.shipDate)+'</td><td>'+esc(o.arNo)+'</td>'+
-      '<td>'+stSel+'</td><td style="white-space:normal;min-width:150px;max-width:260px">'+esc(o.note)+'</td>'+
-      '<td><div class="row" style="gap:0;flex-wrap:nowrap"><button class="iconmini" data-action="edit-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("pencil",13)+'</button>'+
-      '<button class="iconmini del" data-action="del-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("trash",13)+'</button></div></td></tr>';
+  return '<div class="olist">'+rows.map(function(r){return orderCard(r.c,r.o,withCust);}).join("")+'</div>';
+}
+function orderCard(c,o,withCust){
+  var its=orderItems(o);
+  var stSel='<select class="statussel sm" data-action="set-order-status" data-cid="'+c.id+'" data-oid="'+o.id+'" style="'+ORDER_STYLE[o.status]+'">'+
+    ORDER_STATUS.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
+  var h='<div class="ocard">';
+  h+='<div class="ohead">'+stSel+
+    (withCust?'<a href="#" data-action="open" data-id="'+c.id+'" style="font-weight:700">'+esc(c.name)+'</a>':"")+
+    (o.po?'<span style="font-weight:700">PO '+esc(o.po)+'</span>':"")+
+    (o.csNo?'<span style="font-size:12px;color:#6b6680">'+esc(o.csNo)+'</span>':"")+
+    '<span class="amt">'+esc(o.currency||"USD")+' '+fmtMoney(orderAmount(o))+'</span>'+
+    '<div class="row" style="gap:0;flex:none;flex-wrap:nowrap"><button class="iconmini" data-action="edit-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("pencil",14)+'</button>'+
+    '<button class="iconmini del" data-action="del-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("trash",14)+'</button></div></div>';
+  var kv=[];
+  if(o.od)kv.push('下單 <b>'+esc(o.od)+'</b>');
+  if(o.custDelivery)kv.push('交期(客) <b>'+orderDueCell(o)+'</b>');
+  if(o.factoryDelivery)kv.push('交期(廠) <b>'+esc(o.factoryDelivery)+'</b>');
+  if(o.factory)kv.push('工廠 <b>'+esc(o.factory)+'</b>');
+  if(o.shipDate)kv.push('出貨 <b>'+esc(o.shipDate)+'</b>');
+  if(o.cpNo)kv.push('請購 <b>'+esc(o.cpNo)+'</b>');
+  if(o.pcNo)kv.push('採購 <b>'+esc(o.pcNo)+'</b>');
+  if(o.arNo)kv.push('應收 <b>'+esc(o.arNo)+'</b>');
+  if(kv.length)h+='<div class="okv"><span>'+kv.join('</span><span>')+'</span></div>';
+  h+='<table class="oitems"><thead><tr><th>料號</th><th>數量</th><th>單價</th><th>金額</th></tr></thead><tbody>'+
+    its.map(function(it){return '<tr><td style="font-family:monospace">'+(esc(it.pn)||'<span style="color:#c3bcac">—</span>')+'</td><td>'+esc(it.qty)+'</td><td>'+esc(it.price)+'</td><td style="font-weight:600">'+fmtMoney(num(it.qty)*num(it.price))+'</td></tr>';}).join("")+
+    '</tbody></table>';
+  if(o.note)h+='<div class="muted" style="font-size:12.5px;margin-top:8px;white-space:pre-wrap">📝 '+esc(o.note)+'</div>';
+  var sop=o.sop||[];var dn=sop.filter(function(s){return s.done;}).length;
+  h+='<div class="sopwrap"><div class="row" style="justify-content:space-between;margin-bottom:2px">'+
+    '<span style="font-size:12px;font-weight:700;color:#55506a">下單後 SOP <span class="sopprog'+(sop.length&&dn===sop.length?' ok':'')+'">'+dn+'/'+sop.length+(sop.length&&dn===sop.length?' ✓ 完成':'')+'</span></span>'+
+    '<button class="qb" data-action="add-sop" data-cid="'+c.id+'" data-oid="'+o.id+'" style="padding:2px 9px">＋ 加一步</button></div>';
+  h+=sop.map(function(s){
+    return '<div class="soprow'+(s.done?' done':'')+'"><button class="sopchk'+(s.done?' on':'')+'" data-action="toggle-sop" data-cid="'+c.id+'" data-oid="'+o.id+'" data-sid="'+s.id+'">'+(s.done?"✓":"")+'</button>'+
+      '<span class="stext">'+esc(s.text)+'</span>'+
+      (s.done&&s.doneAt?'<span class="muted" style="font-size:11px;flex:none">'+esc(s.doneAt)+'</span>':"")+
+      '<button class="iconmini del" data-action="del-sop" data-cid="'+c.id+'" data-oid="'+o.id+'" data-sid="'+s.id+'">'+icon("x",11)+'</button></div>';
   }).join("");
-  return h+'</tbody></table></div>';
+  h+='</div></div>';
+  return h;
 }
 function orderDueCell(o){
   if(!o.custDelivery)return "";
@@ -1438,6 +1473,7 @@ function renderModal(){
   else if(m.type==="hold")b=holdModal(m.draft);
   else if(m.type==="exchange")b=exchangeModal(m.draft);
   else if(m.type==="cats")b=catsModal();
+  else if(m.type==="sop")b=sopModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
 }
@@ -1576,6 +1612,12 @@ function qcompanyModal(){
     fld("電話 / 傳真 / 網站",'<input class="inp" id="qc_tel" value="'+esc(qc.tel)+'">');
   return shell("報價單公司抬頭",body);
 }
+function sopModal(){
+  var rows=S.data.settings.orderSop.map(function(tx,i){return '<div class="repeat"><span class="grow">'+(i+1)+'. '+esc(tx)+'</span><button class="delx" data-action="del-sopt" data-i="'+i+'">'+icon("trash",13)+'</button></div>';}).join("");
+  var body='<p class="muted" style="margin:0 0 6px;font-size:13px">之後每張<b>新訂單</b>會自動帶入這些步驟，做完就在訂單上打勾。已存在的訂單不受影響（可在各訂單上用「＋ 加一步」補）。</p>'+rows+
+    '<div class="row" style="gap:6px;flex-wrap:nowrap;margin-top:6px"><input class="inp" id="sopt_new" style="flex:1;margin-top:0" placeholder="新步驟，例如：跟工廠確認交期"><button class="btn-soft" data-action="add-sopt">加入</button></div>';
+  return shell("下單後 SOP 範本",body,"完成");
+}
 function catsModal(){
   var rows=S.data.categories.map(function(t,i){return '<div class="repeat"><span class="grow">'+esc(t)+'</span><button class="delx" data-action="del-cat" data-i="'+i+'">'+icon("trash",13)+'</button></div>';}).join("");
   var srows=S.data.statuses.map(function(t,i){return '<div class="repeat"><span class="grow">'+esc(t)+'</span><button class="delx" data-action="del-status" data-i="'+i+'">'+icon("trash",13)+'</button></div>';}).join("");
@@ -1679,6 +1721,18 @@ document.addEventListener("click",function(e){
   if(a==="add-order"){S.modal={type:"order",customerId:S.selectedId,draft:{status:"生產中",currency:"USD",od:todayISO()}};renderModal();return;}
   if(a==="edit-order"){var ocid=t.getAttribute("data-cid")||S.selectedId;var oc=getC(ocid);var oo=(oc.orders||[]).filter(function(o){return o.id===t.getAttribute("data-oid");})[0];if(oo){S.modal={type:"order",customerId:ocid,draft:JSON.parse(JSON.stringify(oo))};renderModal();}return;}
   if(a==="del-order"){var docid=t.getAttribute("data-cid")||S.selectedId;var darr=getC(docid).orders,doo=darr.filter(function(o){return o.id===t.getAttribute("data-oid");})[0],oi=darr.indexOf(doo);softDelete("已刪除一筆訂單",function(){darr.splice(oi,1);},function(){darr.splice(Math.min(oi,darr.length),0,doo);});return;}
+  if(a==="toggle-sop"||a==="add-sop"||a==="del-sop"){
+    var scid=t.getAttribute("data-cid"),soid=t.getAttribute("data-oid");
+    var sord=(getC(scid).orders||[]).filter(function(o){return o.id===soid;})[0];
+    if(!sord)return;if(!Array.isArray(sord.sop))sord.sop=[];
+    if(a==="add-sop"){var stx=prompt("這張訂單要多加哪一步？（例如：提供出貨文件）","");if(stx&&stx.trim()){sord.sop.push({id:uid(),text:stx.trim(),done:false,doneAt:""});save();render();}return;}
+    var stp=sord.sop.filter(function(s){return s.id===t.getAttribute("data-sid");})[0];if(!stp)return;
+    if(a==="toggle-sop"){stp.done=!stp.done;stp.doneAt=stp.done?todayISO():"";save();render();return;}
+    sord.sop.splice(sord.sop.indexOf(stp),1);save();render();return;
+  }
+  if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
+  if(a==="add-sopt"){var sv=document.getElementById("sopt_new").value.trim();if(sv){S.data.settings.orderSop.push(sv);save();renderModal();}return;}
+  if(a==="del-sopt"){S.data.settings.orderSop.splice(parseInt(t.getAttribute("data-i"),10),1);save();renderModal();return;}
 
   if(a==="hold"){S.modal={type:"hold",customerId:S.selectedId,projectId:pid,draft:{}};renderModal();return;}
   if(a==="hold-pick"){var dd=t.getAttribute("data-d");doHold(parseInt(dd,10),null);return;}
@@ -1817,13 +1871,14 @@ function saveModal(){
     d.pn=d.items.map(function(it){return (it.pn||"").trim();}).filter(Boolean).join(", ");
     d.qty=d.items.length===1?d.items[0].qty:"";
     d.price=d.items.length===1?d.items[0].price:"";
-    var co=getC(m.customerId);if(!Array.isArray(co.orders))co.orders=[];if(d.id){var oi2=-1;co.orders.forEach(function(o,ix){if(o.id===d.id)oi2=ix;});if(oi2>=0)co.orders[oi2]=Object.assign(co.orders[oi2],d);}else co.orders.unshift(Object.assign({id:uid(),createdAt:todayISO()},d));}
+    var co=getC(m.customerId);if(!Array.isArray(co.orders))co.orders=[];if(d.id){var oi2=-1;co.orders.forEach(function(o,ix){if(o.id===d.id)oi2=ix;});if(oi2>=0)co.orders[oi2]=Object.assign(co.orders[oi2],d);}else co.orders.unshift(Object.assign({id:uid(),createdAt:todayISO(),sop:(S.data.settings.orderSop||[]).map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};})},d));}
   else if(m.type==="note"){if(!(d.content||"").trim()&&!(d.title||"").trim()&&!(d.images||[]).length){alert("筆記不能空白。");return;}if(d.id){var ni=-1;S.data.notes.forEach(function(n,ix){if(n.id===d.id)ni=ix;});if(ni>=0)S.data.notes[ni]=Object.assign(S.data.notes[ni],d);}else S.data.notes.unshift(Object.assign({id:uid(),createdAt:todayISO(),tags:[],images:[]},d));}
   else if(m.type==="vendor"){if(!(d.name||"").trim()){alert("請輸入廠商名稱。");return;}if(d.id){var vi=-1;S.data.vendors.forEach(function(v,ix){if(v.id===d.id)vi=ix;});if(vi>=0)S.data.vendors[vi]=Object.assign(S.data.vendors[vi],d);}else S.data.vendors.unshift(Object.assign({id:uid(),createdAt:todayISO(),contacts:[]},d));}
   else if(m.type==="hold"){var hd=rv("hold_date");if(hd){doHold(null,hd);return;}else{alert("請選一個提醒時間或日期。");return;}}
   else if(m.type==="exchange"){S.data.exchange={text:d.text,updatedAt:d.date||todayISO()};}
   else if(m.type==="qcompany"){S.data.quoteCompany={zh:rv("qc_zh"),en:rv("qc_en"),addr:rv("qc_addr"),tel:rv("qc_tel")};}
   else if(m.type==="cats"){if(m.backTo){S.modal=m.backTo;save();renderModal();render();return;}S.modal=null;save();render();return;}
+  else if(m.type==="sop"){var sv2=document.getElementById("sopt_new");if(sv2&&sv2.value.trim())S.data.settings.orderSop.push(sv2.value.trim());S.modal=null;save();renderModal();render();return;}
   S.modal=null;save();renderModal();render();
 }
 
