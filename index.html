@@ -353,10 +353,14 @@ textarea.inp{resize:vertical}
 .ohead .amt{margin-left:auto;font-weight:800;font-size:15px;color:#357B50;white-space:nowrap;font-variant-numeric:tabular-nums}
 .okv{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:#6b6680;margin-top:9px}
 .okv b{color:var(--ink);font-weight:600}
-.oitems{border-collapse:collapse;font-size:12.5px;margin-top:9px;min-width:min(100%,340px)}
-.oitems th{font-size:11px;color:var(--muted);text-align:left;padding:2px 18px 4px 0;border-bottom:1px solid var(--line);font-weight:600;white-space:nowrap}
-.oitems td{padding:4px 18px 4px 0;border-bottom:1px dashed #EDEDEA;font-variant-numeric:tabular-nums}
+.oitems{border-collapse:collapse;font-size:12.5px;margin-top:9px;table-layout:fixed;width:100%}
+.oitems th{font-size:11px;color:var(--muted);text-align:left;padding:2px 8px 4px 0;border-bottom:1px solid var(--line);font-weight:600;white-space:nowrap;position:relative;overflow:hidden;text-overflow:ellipsis}
+.oitems td{padding:4px 8px 4px 0;border-bottom:1px dashed #EDEDEA;font-variant-numeric:tabular-nums;overflow:hidden}
 .oitems tr:last-child td{border-bottom:none}
+.colgrip{position:absolute;top:0;right:-4px;width:9px;height:100%;cursor:col-resize;z-index:3;border-radius:2px}
+.colgrip:hover,.colgrip.drag{background:linear-gradient(90deg,transparent 35%,var(--violet) 35%,var(--violet) 65%,transparent 65%)}
+body.colresizing{cursor:col-resize;user-select:none}
+body.colresizing .oin{pointer-events:none}
 .sopwrap{margin-top:11px;border-top:1px dashed var(--line);padding-top:9px}
 .soprow{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
 .soprow .stext{flex:1;min-width:0}
@@ -607,6 +611,7 @@ function normalize(d){
   d.version=2;
   d.settings=Object.assign({staleDays:7,leadDays:14},d.settings||{});if(d.settings.leadDays===7)d.settings.leadDays=14;
   if(!Array.isArray(d.settings.orderSop)||!d.settings.orderSop.length)d.settings.orderSop=["寄 PI 給客人","發信通知工廠下單","提供嘜頭給工廠"];
+  d.settings.orderColW=Object.assign({pn:19,qty:11,price:11,amt:10,desc:26,remark:23},d.settings.orderColW||{});
   if(!Array.isArray(d.statuses))d.statuses=DEFAULT_STATUSES.slice();
   if(!d.exchange)d.exchange={text:"",updatedAt:""};
   if(!Array.isArray(d.categories))d.categories=DEFAULT_CATS.slice();
@@ -635,7 +640,7 @@ function normalize(d){
       if(!o.currency)o.currency="USD";
       ["od","custDelivery","po","pn","qty","price","csNo","cpNo","pcNo","factoryDelivery","factory","shipDate","arNo","note"].forEach(function(k){if(o[k]==null)o[k]="";});
       if(!Array.isArray(o.items)||!o.items.length)o.items=[{id:uid(),pn:o.pn||"",qty:o.qty||"",price:o.price||""}];
-      o.items.forEach(function(it){if(!it.id)it.id=uid();["pn","qty","price","desc"].forEach(function(k){if(it[k]==null)it[k]="";});});
+      o.items.forEach(function(it){if(!it.id)it.id=uid();["pn","qty","price","desc","remark"].forEach(function(k){if(it[k]==null)it[k]="";});});
       o.pn=o.items.map(function(it){return (it.pn||"").trim();}).filter(Boolean).join(", ");
       if(!Array.isArray(o.sop))o.sop=d.settings.orderSop.map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};});
       o.sop.forEach(function(s){if(!s.id)s.id=uid();if(s.done==null)s.done=false;if(s.doneAt==null)s.doneAt="";});
@@ -1172,7 +1177,13 @@ function orderCard(c,o,withCust){
     '<label>採購單號<input class="oin" '+da+' data-of="pcNo" value="'+esc(o.pcNo)+'" placeholder="PC…"></label>'+
     '<label>應收單號<input class="oin" '+da+' data-of="arNo" value="'+esc(o.arNo)+'" placeholder="AR…"></label>'+
     '</div>';
-  h+='<table class="oitems"><thead><tr><th>料號</th><th>數量</th><th>單價</th><th>金額</th><th>品名</th><th></th></tr></thead><tbody>'+
+  var cw=S.data.settings.orderColW;
+  var grip=function(k){return '<span class="colgrip" data-colgrip="'+k+'"></span>';};
+  h+='<table class="oitems"><colgroup>'+
+      '<col data-col="pn" style="width:'+cw.pn+'%"><col data-col="qty" style="width:'+cw.qty+'%"><col data-col="price" style="width:'+cw.price+'%">'+
+      '<col data-col="amt" style="width:'+cw.amt+'%"><col data-col="desc" style="width:'+cw.desc+'%"><col data-col="remark" style="width:'+cw.remark+'%"><col style="width:30px">'+
+    '</colgroup><thead><tr>'+
+      '<th>料號'+grip("pn")+'</th><th>數量'+grip("qty")+'</th><th>單價'+grip("price")+'</th><th>金額'+grip("amt")+'</th><th>品名'+grip("desc")+'</th><th>備註</th><th></th></tr></thead><tbody>'+
     its.map(function(it){
       var ia='data-ocid="'+c.id+'" data-oid="'+o.id+'" data-iid="'+it.id+'"';
       return '<tr>'+
@@ -1181,6 +1192,7 @@ function orderCard(c,o,withCust){
         '<td><input class="oin" '+ia+' data-oif="price" inputmode="decimal" value="'+esc(it.price)+'" placeholder="單價"></td>'+
         '<td style="font-weight:600;white-space:nowrap" id="oiamt-'+it.id+'">'+fmtMoney(num(it.qty)*num(it.price))+'</td>'+
         '<td><input class="oin" '+ia+' data-oif="desc" value="'+esc(it.desc)+'" placeholder="品名 / 說明"></td>'+
+        '<td><input class="oin" '+ia+' data-oif="remark" value="'+esc(it.remark)+'" placeholder="備註"></td>'+
         '<td><button class="iconmini del" data-action="del-oitem" data-ocid="'+c.id+'" data-oid="'+o.id+'" data-iid="'+it.id+'"'+(its.length<2?' style="visibility:hidden"':'')+'>'+icon("x",12)+'</button></td>'+
         '</tr>';
     }).join("")+
@@ -1730,7 +1742,7 @@ document.addEventListener("click",function(e){
     var nocid=t.getAttribute("data-cid")||S.selectedId;var noc=getC(nocid);if(!noc)return;
     if(!Array.isArray(noc.orders))noc.orders=[];
     var nord={id:uid(),createdAt:todayISO(),status:"生產中",currency:"USD",od:todayISO(),custDelivery:"",po:"",csNo:"",cpNo:"",pcNo:"",arNo:"",factory:"",factoryDelivery:"",shipDate:"",note:"",pn:"",qty:"",price:"",
-      items:[{id:uid(),pn:"",qty:"",price:"",desc:""}],
+      items:[{id:uid(),pn:"",qty:"",price:"",desc:"",remark:""}],
       sop:(S.data.settings.orderSop||[]).map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};})};
     noc.orders.unshift(nord);S.newOrderId=nord.id;save();render();
     var fEl=document.querySelector('.oin[data-oid="'+nord.id+'"][data-oif="pn"]');
@@ -1789,8 +1801,8 @@ document.addEventListener("click",function(e){
   if(a==="del-email"){readModal();S.modal.draft.emails.splice(parseInt(t.getAttribute("data-i"),10),1);renderModal();return;}
   if(a==="add-tier"){readModal();var q=document.getElementById("ti_q").value.trim();var pr=document.getElementById("ti_p").value.trim();if(q||pr){S.modal.draft.tiers=(S.modal.draft.tiers||[]).concat([{qty:q,price:pr}]);renderModal();}return;}
   if(a==="del-tier"){readModal();S.modal.draft.tiers.splice(parseInt(t.getAttribute("data-i"),10),1);renderModal();return;}
-  if(a==="add-oitem"){var aoo=orderByEl(t);if(aoo){if(!Array.isArray(aoo.items))aoo.items=[];aoo.items.push({id:uid(),pn:"",qty:"",price:"",desc:""});S.newOrderId=aoo.id;save();render();var nEl=document.querySelector('.oin[data-oid="'+aoo.id+'"][data-iid="'+aoo.items[aoo.items.length-1].id+'"][data-oif="pn"]');if(nEl)nEl.focus();}return;}
-  if(a==="del-oitem"){var doo0=orderByEl(t);if(doo0){doo0.items=(doo0.items||[]).filter(function(it){return it.id!==t.getAttribute("data-iid");});if(!doo0.items.length)doo0.items.push({id:uid(),pn:"",qty:"",price:"",desc:""});doo0.pn=orderPNs(doo0);S.newOrderId=doo0.id;save();render();}return;}
+  if(a==="add-oitem"){var aoo=orderByEl(t);if(aoo){if(!Array.isArray(aoo.items))aoo.items=[];aoo.items.push({id:uid(),pn:"",qty:"",price:"",desc:"",remark:""});S.newOrderId=aoo.id;save();render();var nEl=document.querySelector('.oin[data-oid="'+aoo.id+'"][data-iid="'+aoo.items[aoo.items.length-1].id+'"][data-oif="pn"]');if(nEl)nEl.focus();}return;}
+  if(a==="del-oitem"){var doo0=orderByEl(t);if(doo0){doo0.items=(doo0.items||[]).filter(function(it){return it.id!==t.getAttribute("data-iid");});if(!doo0.items.length)doo0.items.push({id:uid(),pn:"",qty:"",price:"",desc:"",remark:""});doo0.pn=orderPNs(doo0);S.newOrderId=doo0.id;save();render();}return;}
 
   if(a==="save-modal"){saveModal();return;}
   if(a==="copy-weekly"){var tx=genWeekly();navigator.clipboard&&navigator.clipboard.writeText(tx);t.textContent="已複製 ✓";setTimeout(function(){render();},1200);return;}
@@ -1814,6 +1826,35 @@ document.addEventListener("dragstart",function(e){var it=e.target.closest&&e.tar
 document.addEventListener("dragover",function(e){var it=e.target.closest&&e.target.closest(".titem[data-tid]");if(it&&S.dragTodo){e.preventDefault();it.classList.add("tdrop");}},true);
 document.addEventListener("dragleave",function(e){var it=e.target.closest&&e.target.closest(".titem[data-tid]");if(it)it.classList.remove("tdrop");},true);
 document.addEventListener("drop",function(e){var it=e.target.closest&&e.target.closest(".titem[data-tid]");if(it&&S.dragTodo){e.preventDefault();it.classList.remove("tdrop");var w=TW(S.todoWeek);if(w){var from=-1,to=-1,i;for(i=0;i<w.items.length;i++){if(w.items[i].id===S.dragTodo)from=i;if(w.items[i].id===it.getAttribute("data-tid"))to=i;}if(from>=0&&to>=0&&from!==to){var m=w.items.splice(from,1)[0];w.items.splice(to,0,m);save();render();}}S.dragTodo=null;}},true);
+
+/* 訂單品項欄寬：拖標題分隔線調整（所有訂單卡片同步，寬度記住） */
+(function(){
+  var COLORDER=["pn","qty","price","amt","desc","remark"];var MINW=6;
+  var drag=null;
+  document.addEventListener("mousedown",function(e){
+    var g=e.target.closest&&e.target.closest(".colgrip");if(!g)return;
+    e.preventDefault();
+    var key=g.getAttribute("data-colgrip");var idx=COLORDER.indexOf(key);var nextKey=COLORDER[idx+1];if(!nextKey)return;
+    var table=g.closest("table");var W=table?table.getBoundingClientRect().width:600;
+    var cw=S.data.settings.orderColW;
+    drag={key:key,nextKey:nextKey,startX:e.clientX,W:W,left0:cw[key],right0:cw[nextKey]};
+    g.classList.add("drag");document.body.classList.add("colresizing");
+  });
+  document.addEventListener("mousemove",function(e){
+    if(!drag)return;
+    var dPct=(e.clientX-drag.startX)/drag.W*100;
+    var nl=drag.left0+dPct,nr=drag.right0-dPct;
+    if(nl<MINW){nr-=(MINW-nl);nl=MINW;}if(nr<MINW){nl-=(MINW-nr);nr=MINW;}
+    var cw=S.data.settings.orderColW;cw[drag.key]=nl;cw[drag.nextKey]=nr;
+    var cols=document.querySelectorAll('.oitems col[data-col="'+drag.key+'"]');for(var i=0;i<cols.length;i++)cols[i].style.width=nl+"%";
+    var cols2=document.querySelectorAll('.oitems col[data-col="'+drag.nextKey+'"]');for(var j=0;j<cols2.length;j++)cols2[j].style.width=nr+"%";
+  });
+  document.addEventListener("mouseup",function(){
+    if(!drag)return;
+    var gg=document.querySelector(".colgrip.drag");if(gg)gg.classList.remove("drag");
+    document.body.classList.remove("colresizing");drag=null;save();
+  });
+})();
 
 document.addEventListener("change",function(e){
   var t=e.target.closest("[data-action='set-status']");
