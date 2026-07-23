@@ -230,6 +230,19 @@ header{position:sticky;top:0;z-index:30;background:rgba(250,250,251,.7);backdrop
 .tsub{font-size:13px;color:#6E7180;margin-top:3px;padding-left:10px;border-left:2px solid var(--line);outline:none;white-space:pre-wrap}
 .tsub:focus{background:var(--violet-soft);border-radius:5px}
 .tcust{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#4A55BC;background:var(--violet-soft);border-radius:999px;padding:2px 9px;margin-top:6px;font-weight:600}
+.trow1{display:flex;align-items:center;gap:7px}
+.tstepprog{flex:none;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;background:#f1efe7;color:#6b6680}
+.tstepprog.ok{background:var(--grl);color:#357B50}
+.tsteps{margin:5px 0 2px;padding-left:10px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:1px}
+.tstep{display:flex;align-items:center;gap:7px;padding:2px 0}
+.tstep.done .tsteptext{text-decoration:line-through;color:#A9ACB3}
+.tstepchk{flex:none;width:17px;height:17px;border-radius:6px;border:2px solid #CBD0DA;color:#fff;font-size:10px;line-height:1;display:flex;align-items:center;justify-content:center;background:#fff;transition:transform .12s,background .18s,border-color .18s}
+.tstepchk:hover{border-color:#3E8A5C}.tstepchk:active{transform:scale(.88)}
+.tstepchk.on{background:#3E8A5C;border-color:#3E8A5C;animation:pop .25s ease}
+.tsteptext{flex:1;min-width:0;font-size:13px;color:#55586A;outline:none;word-break:break-word}
+.tsteptext:focus{background:var(--violet-soft);border-radius:5px}
+.tstepdel{flex:none;opacity:0}
+.tstep:hover .tstepdel{opacity:1}
 .tactions{flex:none;display:flex;gap:1px;opacity:0;transition:.15s}
 .titem:hover .tactions{opacity:1}
 .todoadd{margin-top:12px}
@@ -618,6 +631,10 @@ function normalize(d){
   if(!Array.isArray(d.notes))d.notes=[];
   if(!Array.isArray(d.vendors))d.vendors=[];
   if(!Array.isArray(d.todoWeeks))d.todoWeeks=[];
+  d.todoWeeks.forEach(function(w){(w.items||[]).forEach(function(it){
+    if(!Array.isArray(it.steps))it.steps=[];
+    it.steps.forEach(function(s){if(!s.id)s.id=uid();if(s.done==null)s.done=false;if(s.text==null)s.text="";});
+  });});
   if(!Array.isArray(d.quoteDocs))d.quoteDocs=[];
   d.quoteDocs.forEach(function(q){if(typeof q.projectId==="undefined")q.projectId="";if(!q.channel)q.channel="Email";
     if(typeof q.showMOQ==="undefined")q.showMOQ="";
@@ -676,7 +693,7 @@ var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:nu
 
 function load(){try{var r=localStorage.getItem(KEY);if(r){S.data=normalize(JSON.parse(r));return;}}catch(e){}S.data=normalize(seed());save();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S.data));var s=document.getElementById("saved");s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1100);}catch(e){console.error(e);}}
-function renderToast(){var r=document.getElementById("toast-root");if(!r)return;if(!S.toast){r.innerHTML="";return;}r.innerHTML='<div class="toast">'+icon("trash",15)+'<span class="tx">'+esc(S.toast.label)+'</span><button class="toast-undo" data-action="undo">↺ 復原</button></div>';}
+function renderToast(){var r=document.getElementById("toast-root");if(!r)return;if(!S.toast){r.innerHTML="";return;}var undo=S.toast.restore?('<button class="toast-undo" data-action="undo">↺ 復原</button>'):"";r.innerHTML='<div class="toast">'+(S.toast.restore?icon("trash",15):"✓")+'<span class="tx">'+esc(S.toast.label)+'</span>'+undo+'</div>';}
 function showToast(label,restore){clearTimeout(S.toastTimer);S.toast={label:label,restore:restore};renderToast();S.toastTimer=setTimeout(function(){S.toast=null;renderToast();},6000);}
 function softDelete(label,removeFn,restoreFn){removeFn();save();render();showToast(label,restoreFn);}
 
@@ -685,6 +702,8 @@ function getC(id){return S.data.customers.filter(function(c){return c.id===id;})
 function factoryText(p){return ((p.factorySubjects&&p.factorySubjects.length)?p.factorySubjects.map(function(f){return f.subject||f;}):(p.factorySubject?[p.factorySubject]:[])).join("； ");}
 function TW(id){return S.data.todoWeeks.filter(function(w){return w.id===id;})[0];}
 function TI(wid,tid){var w=TW(wid);return w?w.items.filter(function(i){return i.id===tid;})[0]:null;}
+function TS(wid,tid,sid){var it=TI(wid,tid);return it?(it.steps||[]).filter(function(s){return s.id===sid;})[0]:null;}
+function cloneTodo(i){return {id:uid(),text:i.text,done:false,star:!!i.star,sub:i.sub||"",cust:i.cust||null,steps:(i.steps||[]).map(function(s){return {id:uid(),text:s.text,done:!!s.done};})};}
 function lastUpd(p){if(!p.updates||!p.updates.length)return null;return p.updates.map(function(u){return u.date;}).sort().slice(-1)[0];}
 function lastAct(p){var lu=lastUpd(p);if(lu&&p.touchedAt)return lu>p.touchedAt?lu:p.touchedAt;return lu||p.touchedAt||null;}
 function touch(p){p.touchedAt=todayISO();if(p.followUpDate&&p.followUpDate<=todayISO())p.followUpDate="";}
@@ -1284,7 +1303,7 @@ function renderTodos(){
   var weeks=S.data.todoWeeks;
   if(!S.todoWeek&&weeks.length)S.todoWeek=weeks[0].id;
   var wk=weeks.filter(function(w){return w.id===S.todoWeek;})[0];
-  var h='<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><h2 class="sectitle">📝 待辦</h2><p class="subt">每週要做什麼，一條一條記、打勾劃掉。可標星號、寫子項、綁客戶。</p></div>'+
+  var h='<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><h2 class="sectitle">📝 待辦</h2><p class="subt">每週要做什麼，一條一條記、打勾劃掉。可標星號、加流程步驟逐一打勾、綁客戶。新增一週會問你要不要把上週沒完成的帶過來。</p></div>'+
     '<button class="btn-dark" data-action="add-week">'+icon("plus",16)+' 新增一週</button></div>';
   if(!weeks.length)return h+'<div class="empty"><div class="big">🗓️</div><p>還沒有任何一週，點「新增一週」開始</p></div>';
   h+='<div class="todowrap"><div class="weekcol">'+weeks.map(function(w){
@@ -1295,22 +1314,35 @@ function renderTodos(){
 }
 function todoPanel(w){
   var items=w.items||[];
+  var wi=S.data.todoWeeks.indexOf(w);var prevW=S.data.todoWeeks[wi+1];
+  var canCarry=prevW&&(prevW.items||[]).some(function(i){return !i.done;});
   var h='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div class="row" style="gap:8px"><h3 style="margin:0;font-size:18px;font-weight:800">'+esc(w.label)+'</h3><button class="iconmini" data-action="rename-week" data-wid="'+w.id+'">'+icon("pencil",14)+'</button><button class="iconmini del" data-action="del-week" data-wid="'+w.id+'">'+icon("trash",14)+'</button></div>'+
-    '<span class="muted" style="font-size:12px">'+items.filter(function(i){return i.done;}).length+' / '+items.length+' 完成</span></div>';
+    '<div class="row" style="gap:8px">'+(canCarry?'<button class="qb" data-action="carry-week" data-wid="'+w.id+'" title="把上一週沒完成的帶過來" style="padding:4px 10px">↩ 帶入上週未完成</button>':"")+'<span class="muted" style="font-size:12px">'+items.filter(function(i){return i.done;}).length+' / '+items.length+' 完成</span></div></div>';
   h+='<div class="todolist">';
   if(!items.length)h+='<div class="muted" style="font-size:13px;padding:6px 0">這週還沒有待辦，在下面打字加一條。</div>';
   h+=items.map(function(it){
     var cust=it.cust?getC(it.cust):null;
+    var steps=it.steps||[];var sdone=steps.filter(function(s){return s.done;}).length;
+    var stepsHtml=steps.length?('<div class="tsteps">'+steps.map(function(st){
+      return '<div class="tstep'+(st.done?" done":"")+'">'+
+        '<button class="tstepchk'+(st.done?" on":"")+'" data-action="todo-step-toggle" data-wid="'+w.id+'" data-tid="'+it.id+'" data-sid="'+st.id+'">'+(st.done?"✓":"")+'</button>'+
+        '<span class="tsteptext" contenteditable="true" data-action-blur="todo-step-text" data-wid="'+w.id+'" data-tid="'+it.id+'" data-sid="'+st.id+'">'+esc(st.text)+'</span>'+
+        '<button class="iconmini del tstepdel" data-action="todo-step-del" data-wid="'+w.id+'" data-tid="'+it.id+'" data-sid="'+st.id+'">'+icon("x",11)+'</button>'+
+      '</div>';
+    }).join("")+'<button class="qb" data-action="todo-step-add" data-wid="'+w.id+'" data-tid="'+it.id+'" style="margin-top:4px;padding:2px 9px;align-self:flex-start">＋ 步驟</button></div>'):"";
     return '<div class="titem'+(it.done?" done":"")+'" draggable="true" data-tid="'+it.id+'">'+
       '<button class="tcheck'+(it.done?" on":"")+(it.star?" star":"")+'" data-action="todo-toggle" data-wid="'+w.id+'" data-tid="'+it.id+'">'+(it.star?"★":(it.done?"✓":""))+'</button>'+
       '<div class="tbody">'+
-        '<div class="ttext" contenteditable="true" data-action-blur="todo-text" data-wid="'+w.id+'" data-tid="'+it.id+'">'+esc(it.text)+'</div>'+
+        '<div class="trow1"><div class="ttext" contenteditable="true" data-action-blur="todo-text" data-wid="'+w.id+'" data-tid="'+it.id+'">'+esc(it.text)+'</div>'+
+          (steps.length?'<span class="tstepprog'+(sdone===steps.length?" ok":"")+'">'+sdone+'/'+steps.length+(sdone===steps.length?" ✓":"")+'</span>':"")+'</div>'+
         (it.sub?'<div class="tsub" contenteditable="true" data-action-blur="todo-sub" data-wid="'+w.id+'" data-tid="'+it.id+'">'+esc(it.sub)+'</div>':"")+
+        stepsHtml+
         (cust?'<button class="tcust" data-action="open" data-id="'+cust.id+'">'+icon("user",10)+' '+esc(cust.name)+'</button>':"")+
       '</div>'+
       '<div class="tactions">'+
         '<button class="iconmini" data-action="todo-star" data-wid="'+w.id+'" data-tid="'+it.id+'" title="重要">'+(it.star?"★":"☆")+'</button>'+
-        '<button class="iconmini" data-action="todo-sub-add" data-wid="'+w.id+'" data-tid="'+it.id+'" title="加子項/備註">'+icon("plus",13)+'</button>'+
+        '<button class="iconmini" data-action="todo-step-add" data-wid="'+w.id+'" data-tid="'+it.id+'" title="加流程步驟（可逐一打勾）">☑</button>'+
+        '<button class="iconmini" data-action="todo-sub-add" data-wid="'+w.id+'" data-tid="'+it.id+'" title="加備註">'+icon("plus",13)+'</button>'+
         '<button class="iconmini" data-action="todo-bind" data-wid="'+w.id+'" data-tid="'+it.id+'" title="綁客戶">'+icon("user",13)+'</button>'+
         '<button class="iconmini del" data-action="todo-del" data-wid="'+w.id+'" data-tid="'+it.id+'">'+icon("x",13)+'</button>'+
       '</div></div>';
@@ -1700,7 +1732,17 @@ document.addEventListener("click",function(e){
   if(a==="qad-del"){var qdoc2=QD(S.quoteId);var qit2=qdoc2.items.filter(function(x){return x.id===t.getAttribute("data-iid");})[0];if(qit2){qit2.addons=qit2.addons.filter(function(ad){return ad.id!==t.getAttribute("data-aid");});save();render();}return;}
   if(a==="excel-quote"){var xq=QD(S.quoteId);if(xq)exportQuoteExcel(xq);return;}
   if(a==="edit-qcompany"){S.modal={type:"qcompany",draft:{}};renderModal();return;}
-  if(a==="add-week"){var lbl=prompt("週別標籤（例如 "+thisWeekLabel()+" 或 6/9-6/13）：",thisWeekLabel());if(lbl&&lbl.trim()){var w={id:uid(),label:lbl.trim(),items:[]};S.data.todoWeeks.unshift(w);S.todoWeek=w.id;save();render();}return;}
+  if(a==="add-week"){var lbl=prompt("週別標籤（例如 "+thisWeekLabel()+" 或 6/9-6/13）：",thisWeekLabel());if(lbl&&lbl.trim()){var w={id:uid(),label:lbl.trim(),items:[]};S.data.todoWeeks.unshift(w);S.todoWeek=w.id;
+    var prevw=S.data.todoWeeks[1];
+    if(prevw){var un=prevw.items.filter(function(i){return !i.done;});if(un.length&&confirm("要把「"+prevw.label+"」的 "+un.length+" 條未完成事項帶到這一週嗎？"))un.forEach(function(i){w.items.push(cloneTodo(i));});}
+    save();render();}return;}
+  if(a==="carry-week"){var cw=TW(t.getAttribute("data-wid")),cwi=S.data.todoWeeks.indexOf(cw),pw=S.data.todoWeeks[cwi+1];if(!pw){alert("沒有更早的一週可以帶入。");return;}
+    var exist=cw.items.map(function(i){return i.text;});var moved=0;
+    pw.items.filter(function(i){return !i.done;}).forEach(function(i){if(exist.indexOf(i.text)<0){cw.items.push(cloneTodo(i));moved++;}});
+    save();render();showToast(moved?("已帶入 "+moved+" 條未完成"):"沒有可帶入的（都完成或已存在）",null);return;}
+  if(a==="todo-step-add"){var sit=TI(t.getAttribute("data-wid"),t.getAttribute("data-tid"));if(sit){if(!Array.isArray(sit.steps))sit.steps=[];var nst={id:uid(),text:"",done:false};sit.steps.push(nst);save();render();setTimeout(function(){var el=document.querySelector('[data-action-blur="todo-step-text"][data-sid="'+nst.id+'"]');if(el){el.focus();}},30);}return;}
+  if(a==="todo-step-toggle"){var sst=TS(t.getAttribute("data-wid"),t.getAttribute("data-tid"),t.getAttribute("data-sid"));if(sst){sst.done=!sst.done;save();render();}return;}
+  if(a==="todo-step-del"){var dit=TI(t.getAttribute("data-wid"),t.getAttribute("data-tid"));if(dit){dit.steps=(dit.steps||[]).filter(function(s){return s.id!==t.getAttribute("data-sid");});save();render();}return;}
   if(a==="pick-week"){S.todoWeek=t.getAttribute("data-wid");render();return;}
   if(a==="rename-week"){var w2=TW(t.getAttribute("data-wid"));var nl=prompt("改週別標籤：",w2.label);if(nl&&nl.trim()){w2.label=nl.trim();save();render();}return;}
   if(a==="del-week"){var wid=t.getAttribute("data-wid"),arr=S.data.todoWeeks,w3=TW(wid),idx=arr.indexOf(w3);softDelete('已刪除「'+w3.label+'」',function(){arr.splice(idx,1);if(S.todoWeek===wid)S.todoWeek=arr.length?arr[0].id:null;},function(){arr.splice(Math.min(idx,arr.length),0,w3);S.todoWeek=wid;});return;}
@@ -1813,7 +1855,7 @@ document.addEventListener("toggle",function(e){
 },true);
 document.addEventListener("keydown",function(e){
   var add=e.target.closest("[data-action-enter='todo-add']");
-  if(add&&e.key==="Enter"){e.preventDefault();var w=TW(add.getAttribute("data-wid"));var v=add.value.trim();if(w&&v){w.items.push({id:uid(),text:v,done:false,star:false,sub:"",cust:null});save();render();setTimeout(function(){var el=document.getElementById("todo_new");if(el)el.focus();},20);}}
+  if(add&&e.key==="Enter"){e.preventDefault();var w=TW(add.getAttribute("data-wid"));var v=add.value.trim();if(w&&v){w.items.push({id:uid(),text:v,done:false,star:false,sub:"",cust:null,steps:[]});save();render();setTimeout(function(){var el=document.getElementById("todo_new");if(el)el.focus();},20);}}
 });
 document.addEventListener("blur",function(e){
   var el=e.target.closest&&e.target.closest("[data-action-blur]");if(!el)return;
@@ -1821,6 +1863,7 @@ document.addEventListener("blur",function(e){
   var txt=el.textContent.trim();
   if(act==="todo-text"){if(txt){it.text=txt;save();}else render();}
   else if(act==="todo-sub"){it.sub=txt;save();if(!txt)render();}
+  else if(act==="todo-step-text"){var st=(it.steps||[]).filter(function(s){return s.id===el.getAttribute("data-sid");})[0];if(st){if(txt){st.text=txt;save();}else{it.steps=it.steps.filter(function(s){return s.id!==st.id;});save();render();}}}
 },true);
 document.addEventListener("dragstart",function(e){var it=e.target.closest&&e.target.closest(".titem[data-tid]");if(it){S.dragTodo=it.getAttribute("data-tid");e.dataTransfer.effectAllowed="move";}},true);
 document.addEventListener("dragover",function(e){var it=e.target.closest&&e.target.closest(".titem[data-tid]");if(it&&S.dragTodo){e.preventDefault();it.classList.add("tdrop");}},true);
