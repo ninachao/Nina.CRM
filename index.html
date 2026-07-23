@@ -368,6 +368,18 @@ textarea.inp{resize:vertical}
 .sopchk.on{background:#3E8A5C;border-color:#3E8A5C;animation:pop .25s ease}
 .sopprog{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;background:#f1efe7;color:#6b6680}
 .sopprog.ok{background:var(--grl);color:#357B50}
+/* inline-editable order fields */
+.oin{border:1px solid transparent;background:transparent;border-radius:8px;padding:3px 7px;font:inherit;color:inherit;width:100%;transition:border-color .15s,background .15s,box-shadow .15s}
+.oin:hover{border-color:var(--line);background:rgba(255,255,255,.6)}
+.oin:focus{outline:none;border-color:var(--violet);background:#fff;box-shadow:0 0 0 3px var(--violet-soft)}
+.oin::placeholder{color:#c3bcac}
+.oin::-webkit-calendar-picker-indicator{opacity:.4}
+.ometa{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:4px 10px;margin-top:9px}
+.ometa label{display:flex;flex-direction:column;gap:0;font-size:11px;color:var(--muted)}
+.ometa label .oin{font-size:12.5px;color:var(--ink);margin-top:1px}
+.oitems input.oin{font-size:12.5px;padding:2px 6px}
+.oitems td{vertical-align:middle}
+.ocard.onew{box-shadow:0 0 0 2px var(--violet),0 6px 20px rgba(94,106,210,.16)}
 .revchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--grl);color:#357B50}
 /* ===== 報價單 ===== */
 .qitem{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;background:rgba(255,255,255,.55)}
@@ -623,7 +635,7 @@ function normalize(d){
       if(!o.currency)o.currency="USD";
       ["od","custDelivery","po","pn","qty","price","csNo","cpNo","pcNo","factoryDelivery","factory","shipDate","arNo","note"].forEach(function(k){if(o[k]==null)o[k]="";});
       if(!Array.isArray(o.items)||!o.items.length)o.items=[{id:uid(),pn:o.pn||"",qty:o.qty||"",price:o.price||""}];
-      o.items.forEach(function(it){if(!it.id)it.id=uid();["pn","qty","price"].forEach(function(k){if(it[k]==null)it[k]="";});});
+      o.items.forEach(function(it){if(!it.id)it.id=uid();["pn","qty","price","desc"].forEach(function(k){if(it[k]==null)it[k]="";});});
       o.pn=o.items.map(function(it){return (it.pn||"").trim();}).filter(Boolean).join(", ");
       if(!Array.isArray(o.sop))o.sop=d.settings.orderSop.map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};});
       o.sop.forEach(function(s){if(!s.id)s.id=uid();if(s.done==null)s.done=false;if(s.doneAt==null)s.doneAt="";});
@@ -1138,30 +1150,44 @@ function ordersList(rows,withCust){
 }
 function orderCard(c,o,withCust){
   var its=orderItems(o);
+  var da='data-ocid="'+c.id+'" data-oid="'+o.id+'"';
   var stSel='<select class="statussel sm" data-action="set-order-status" data-cid="'+c.id+'" data-oid="'+o.id+'" style="'+ORDER_STYLE[o.status]+'">'+
     ORDER_STATUS.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
-  var h='<div class="ocard">';
+  var curSel='<select class="oin" '+da+' data-of="currency" style="width:auto;font-weight:700;color:#357B50;padding:2px 4px">'+
+    ORDER_CURRENCIES.map(function(x){return '<option'+((o.currency||"USD")===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
+  var h='<div class="ocard'+(o.id===S.newOrderId?' onew':'')+'">';
   h+='<div class="ohead">'+stSel+
-    (withCust?'<a href="#" data-action="open" data-id="'+c.id+'" style="font-weight:700">'+esc(c.name)+'</a>':"")+
-    (o.po?'<span style="font-weight:700">PO '+esc(o.po)+'</span>':"")+
-    (o.csNo?'<span style="font-size:12px;color:#6b6680">'+esc(o.csNo)+'</span>':"")+
-    '<span class="amt">'+esc(o.currency||"USD")+' '+fmtMoney(orderAmount(o))+'</span>'+
-    '<div class="row" style="gap:0;flex:none;flex-wrap:nowrap"><button class="iconmini" data-action="edit-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("pencil",14)+'</button>'+
-    '<button class="iconmini del" data-action="del-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("trash",14)+'</button></div></div>';
-  var kv=[];
-  if(o.od)kv.push('下單 <b>'+esc(o.od)+'</b>');
-  if(o.custDelivery)kv.push('交期(客) <b>'+orderDueCell(o)+'</b>');
-  if(o.factoryDelivery)kv.push('交期(廠) <b>'+esc(o.factoryDelivery)+'</b>');
-  if(o.factory)kv.push('工廠 <b>'+esc(o.factory)+'</b>');
-  if(o.shipDate)kv.push('出貨 <b>'+esc(o.shipDate)+'</b>');
-  if(o.cpNo)kv.push('請購 <b>'+esc(o.cpNo)+'</b>');
-  if(o.pcNo)kv.push('採購 <b>'+esc(o.pcNo)+'</b>');
-  if(o.arNo)kv.push('應收 <b>'+esc(o.arNo)+'</b>');
-  if(kv.length)h+='<div class="okv"><span>'+kv.join('</span><span>')+'</span></div>';
-  h+='<table class="oitems"><thead><tr><th>料號</th><th>數量</th><th>單價</th><th>金額</th></tr></thead><tbody>'+
-    its.map(function(it){return '<tr><td style="font-family:monospace">'+(esc(it.pn)||'<span style="color:#c3bcac">—</span>')+'</td><td>'+esc(it.qty)+'</td><td>'+esc(it.price)+'</td><td style="font-weight:600">'+fmtMoney(num(it.qty)*num(it.price))+'</td></tr>';}).join("")+
-    '</tbody></table>';
-  if(o.note)h+='<div class="muted" style="font-size:12.5px;margin-top:8px;white-space:pre-wrap">📝 '+esc(o.note)+'</div>';
+    (withCust?'<a href="#" data-action="open" data-id="'+c.id+'" style="font-weight:700;flex:none">'+esc(c.name)+'</a>':"")+
+    '<input class="oin" '+da+' data-of="po" value="'+esc(o.po)+'" placeholder="PO#" style="flex:0 1 150px;font-weight:700">'+
+    '<input class="oin" '+da+' data-of="csNo" value="'+esc(o.csNo)+'" placeholder="訂單單號" style="flex:0 1 160px;font-size:12px;color:#6b6680">'+
+    '<span class="amt" style="display:inline-flex;align-items:center;gap:3px">'+curSel+'<b id="oamt-'+o.id+'">'+fmtMoney(orderAmount(o))+'</b></span>'+
+    '<div class="row" style="gap:0;flex:none;flex-wrap:nowrap"><button class="iconmini del" data-action="del-order" data-cid="'+c.id+'" data-oid="'+o.id+'">'+icon("trash",14)+'</button></div></div>';
+  h+='<div class="ometa">'+
+    '<label>下單日<input class="oin" type="date" '+da+' data-of="od" value="'+esc(o.od)+'"></label>'+
+    '<label>交期(客)'+orderDueWarn(o)+'<input class="oin" type="date" '+da+' data-of="custDelivery" value="'+esc(o.custDelivery)+'"></label>'+
+    '<label>交期(廠)<input class="oin" type="date" '+da+' data-of="factoryDelivery" value="'+esc(o.factoryDelivery)+'"></label>'+
+    '<label>工廠<input class="oin" '+da+' data-of="factory" value="'+esc(o.factory)+'" placeholder="工廠名"></label>'+
+    '<label>出貨日<input class="oin" type="date" '+da+' data-of="shipDate" value="'+esc(o.shipDate)+'"></label>'+
+    '<label>請購單號<input class="oin" '+da+' data-of="cpNo" value="'+esc(o.cpNo)+'" placeholder="CP…"></label>'+
+    '<label>採購單號<input class="oin" '+da+' data-of="pcNo" value="'+esc(o.pcNo)+'" placeholder="PC…"></label>'+
+    '<label>應收單號<input class="oin" '+da+' data-of="arNo" value="'+esc(o.arNo)+'" placeholder="AR…"></label>'+
+    '</div>';
+  h+='<table class="oitems"><thead><tr><th>料號</th><th>數量</th><th>單價</th><th>金額</th><th>品名</th><th></th></tr></thead><tbody>'+
+    its.map(function(it){
+      var ia='data-ocid="'+c.id+'" data-oid="'+o.id+'" data-iid="'+it.id+'"';
+      return '<tr>'+
+        '<td><input class="oin" '+ia+' data-oif="pn" value="'+esc(it.pn)+'" placeholder="料號" style="font-family:monospace"></td>'+
+        '<td><input class="oin" '+ia+' data-oif="qty" inputmode="decimal" value="'+esc(it.qty)+'" placeholder="數量"></td>'+
+        '<td><input class="oin" '+ia+' data-oif="price" inputmode="decimal" value="'+esc(it.price)+'" placeholder="單價"></td>'+
+        '<td style="font-weight:600;white-space:nowrap" id="oiamt-'+it.id+'">'+fmtMoney(num(it.qty)*num(it.price))+'</td>'+
+        '<td><input class="oin" '+ia+' data-oif="desc" value="'+esc(it.desc)+'" placeholder="品名 / 說明"></td>'+
+        '<td><button class="iconmini del" data-action="del-oitem" data-ocid="'+c.id+'" data-oid="'+o.id+'" data-iid="'+it.id+'"'+(its.length<2?' style="visibility:hidden"':'')+'>'+icon("x",12)+'</button></td>'+
+        '</tr>';
+    }).join("")+
+    '</tbody></table>'+
+    '<button class="qb" data-action="add-oitem" data-ocid="'+c.id+'" data-oid="'+o.id+'" style="margin-top:7px;padding:3px 10px">＋ 加一項</button>';
+  h+='<label style="display:block;margin-top:9px"><span style="font-size:11px;color:var(--muted)">備註</span>'+
+    '<textarea class="oin" '+da+' data-of="note" rows="1" placeholder="出貨 / 包裝 / 嘜頭備註…" style="resize:vertical;border:1px solid var(--line);background:rgba(255,255,255,.5);margin-top:2px;display:block">'+esc(o.note)+'</textarea></label>';
   var sop=o.sop||[];var dn=sop.filter(function(s){return s.done;}).length;
   h+='<div class="sopwrap"><div class="row" style="justify-content:space-between;margin-bottom:2px">'+
     '<span style="font-size:12px;font-weight:700;color:#55506a">下單後 SOP <span class="sopprog'+(sop.length&&dn===sop.length?' ok':'')+'">'+dn+'/'+sop.length+(sop.length&&dn===sop.length?' ✓ 完成':'')+'</span></span>'+
@@ -1184,6 +1210,19 @@ function orderDueCell(o){
   if(dd===0)return '<span class="late" style="color:#C23A55;font-weight:700">'+esc(o.custDelivery)+'（今天）</span>';
   if(dd>=-lead)return '<span style="color:#C07A2E;font-weight:700">'+esc(o.custDelivery)+'（剩 '+(-dd)+' 天）</span>';
   return esc(o.custDelivery);
+}
+function orderDueWarn(o){
+  if(!o.custDelivery||o.status!=="生產中")return "";
+  var dd=daysSince(o.custDelivery);var lead=S.data.settings.leadDays||14;
+  if(dd>0)return ' <b style="color:#C23A55">· 過 '+dd+' 天</b>';
+  if(dd===0)return ' <b style="color:#C23A55">· 今天</b>';
+  if(dd>=-lead)return ' <b style="color:#C07A2E">· 剩 '+(-dd)+' 天</b>';
+  return "";
+}
+function orderByEl(el){var c=getC(el.getAttribute("data-ocid"));return c&&(c.orders||[]).filter(function(o){return o.id===el.getAttribute("data-oid");})[0];}
+function updateOrderAmtDom(o){
+  var el=document.getElementById("oamt-"+o.id);if(el)el.textContent=fmtMoney(orderAmount(o));
+  orderItems(o).forEach(function(it){var ce=document.getElementById("oiamt-"+it.id);if(ce)ce.textContent=fmtMoney(num(it.qty)*num(it.price));});
 }
 
 /* ---------- 小抄 ---------- */
@@ -1467,7 +1506,6 @@ function renderModal(){
   else if(m.type==="update")b=updateModal(m.draft);
   else if(m.type==="quote")b=quoteModal(m.draft);
   else if(m.type==="sample")b=sampleModal(m.draft);
-  else if(m.type==="order")b=orderModal(m.draft);
   else if(m.type==="note")b=noteModal(m.draft);
   else if(m.type==="vendor")b=vendorModal(m.draft);
   else if(m.type==="hold")b=holdModal(m.draft);
@@ -1545,29 +1583,6 @@ function sampleModal(d){
     fld("客人回饋",'<textarea class="inp" id="s_fb" rows="2">'+esc(d.feedback)+'</textarea>');
   return shell(d.id?"編輯寄樣":"加寄樣",body,d.id?"儲存":"新增");
 }
-function orderModal(d){
-  d=d||{status:"生產中",currency:"USD"};
-  var stSel='<select class="inp" id="o_status">'+ORDER_STATUS.map(function(s){return '<option'+((d.status||"生產中")===s?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
-  var curSel='<select class="inp" id="o_cur">'+ORDER_CURRENCIES.map(function(x){return '<option'+((d.currency||"USD")===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
-  if(!Array.isArray(d.items)||!d.items.length)d.items=[{id:uid(),pn:d.pn||"",qty:d.qty||"",price:d.price||""}];
-  var itemRows=d.items.map(function(it,i){
-    return '<div class="row oitrow" style="gap:6px;flex-wrap:nowrap;margin-top:'+(i?'6px':'5px')+'">'+
-      '<input class="inp oit-pn" style="flex:1.5;min-width:0;margin-top:0" placeholder="料號 如 S6GL000006" value="'+esc(it.pn)+'">'+
-      '<input class="inp oit-qty" inputmode="decimal" style="flex:1;min-width:0;margin-top:0" placeholder="數量" value="'+esc(it.qty)+'">'+
-      '<input class="inp oit-price" inputmode="decimal" style="flex:1;min-width:0;margin-top:0" placeholder="單價" value="'+esc(it.price)+'">'+
-      '<button type="button" class="delx" data-action="del-oitem" data-i="'+i+'" title="刪除這個品項"'+(d.items.length<2?' style="visibility:hidden"':'')+'>'+icon("x",13)+'</button></div>';
-  }).join("");
-  var body='<div class="two">'+fld("下單日 OD",'<input class="inp" type="date" id="o_od" value="'+esc(d.od||todayISO())+'">')+fld("交期(客)",'<input class="inp" type="date" id="o_cd" value="'+esc(d.custDelivery)+'">')+'</div>'+
-    '<div class="two">'+fld("PO#",'<input class="inp" id="o_po" value="'+esc(d.po)+'">')+fld("幣別",curSel)+'</div>'+
-    fld("品項（一張訂單可多個品項：料號｜數量｜單價）",'<div id="o_items">'+itemRows+'</div><button type="button" class="btn-soft" data-action="add-oitem" style="margin-top:8px;padding:7px 12px">＋ 加一項</button>')+
-    '<div class="muted" style="font-size:13px;margin-top:2px">總金額（自動算，各品項加總）：<b id="o_amt" style="color:#357B50">'+fmtMoney(orderAmount(d))+'</b></div>'+
-    '<div class="three">'+fld("訂單單號",'<input class="inp" id="o_cs" value="'+esc(d.csNo)+'" placeholder="CS302-xxx">')+fld("請購單號",'<input class="inp" id="o_cp" value="'+esc(d.cpNo)+'" placeholder="CP012-xxx">')+fld("採購單號",'<input class="inp" id="o_pc" value="'+esc(d.pcNo)+'" placeholder="PC233-xxx">')+'</div>'+
-    '<div class="two">'+fld("交期(廠)",'<input class="inp" type="date" id="o_fd" value="'+esc(d.factoryDelivery)+'">')+fld("工廠",'<input class="inp" id="o_factory" value="'+esc(d.factory)+'">')+'</div>'+
-    '<div class="two">'+fld("出貨日",'<input class="inp" type="date" id="o_ship" value="'+esc(d.shipDate)+'">')+fld("應收單號",'<input class="inp" id="o_ar" value="'+esc(d.arNo)+'">')+'</div>'+
-    fld("狀態",stSel)+
-    fld("note",'<textarea class="inp" id="o_note" rows="2">'+esc(d.note)+'</textarea>');
-  return shell(d.id?"編輯訂單":"新增訂單",body,d.id?"儲存":"新增");
-}
 function noteModal(d){
   d=d||{tags:[],images:[],scope:"company"};
   var cats=S.data.categories;
@@ -1637,13 +1652,6 @@ function readModal(){
   else if(m.type==="update")Object.assign(d,{date:rv("u_date"),note:rv("u_note"),thread:(document.getElementById("u_thread")?rv("u_thread"):(d.thread||""))});
   else if(m.type==="quote")Object.assign(d,{product:rv("q_prod"),currency:rv("q_cur"),quoteDate:rv("q_date"),validUntil:rv("q_valid"),note:rv("q_note")});
   else if(m.type==="sample")Object.assign(d,{item:rv("s_item"),qty:rv("s_qty"),shipDate:rv("s_ship"),status:rv("s_status"),courier:rv("s_courier"),tracking:rv("s_track"),feeType:rv("s_fee"),feeStatus:rv("s_feest"),feeCustom:rv("s_feecustom"),feedback:rv("s_fb")});
-  else if(m.type==="order"){
-    var orows=document.querySelectorAll("#o_items .oitrow");
-    if(orows.length){var oits=[];for(var oi=0;oi<orows.length;oi++){var orw=orows[oi],oold=(d.items||[])[oi]||{};
-      oits.push({id:oold.id||uid(),pn:orw.querySelector(".oit-pn").value,qty:orw.querySelector(".oit-qty").value,price:orw.querySelector(".oit-price").value});}
-      d.items=oits;}
-    Object.assign(d,{od:rv("o_od"),custDelivery:rv("o_cd"),po:rv("o_po"),currency:rv("o_cur"),csNo:rv("o_cs"),cpNo:rv("o_cp"),pcNo:rv("o_pc"),factoryDelivery:rv("o_fd"),factory:rv("o_factory"),shipDate:rv("o_ship"),arNo:rv("o_ar"),status:rv("o_status"),note:rv("o_note")});
-  }
   else if(m.type==="note")Object.assign(d,{title:rv("n_title"),content:rv("n_content"),scope:rv("n_scope")});
   else if(m.type==="vendor")Object.assign(d,{name:rv("v_name"),type:rv("v_type"),note:rv("v_note")});
   else if(m.type==="exchange")Object.assign(d,{text:rv("x_text"),date:rv("x_date")});
@@ -1658,8 +1666,8 @@ document.addEventListener("click",function(e){
 
   if(a==="overlay"){return;}
   if(a==="close-modal"){S.modal=null;renderModal();return;}
-  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";render();window.scrollTo(0,0);return;}
-  if(a==="open"){e.preventDefault();S.selectedId=id;S.view="detail";render();window.scrollTo(0,0);return;}
+  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";S.newOrderId=null;render();window.scrollTo(0,0);return;}
+  if(a==="open"){e.preventDefault();S.selectedId=id;S.view="detail";S.newOrderId=null;render();window.scrollTo(0,0);return;}
   if(a==="cfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="nfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="sfilter"){S.filter=t.getAttribute("data-f");render();return;}
@@ -1718,8 +1726,17 @@ document.addEventListener("click",function(e){
   if(a==="edit-sample"){var ps=P();var sm=ps.samples.filter(function(s){return s.id===t.getAttribute("data-sid");})[0];S.modal={type:"sample",customerId:S.selectedId,projectId:pid,draft:JSON.parse(JSON.stringify(sm))};renderModal();return;}
   if(a==="del-sample"){var p4=P(),s4=p4.samples.filter(function(s){return s.id===t.getAttribute("data-sid");})[0],si=p4.samples.indexOf(s4);softDelete("已刪除一筆寄樣",function(){p4.samples.splice(si,1);},function(){p4.samples.splice(Math.min(si,p4.samples.length),0,s4);});return;}
 
-  if(a==="add-order"){S.modal={type:"order",customerId:S.selectedId,draft:{status:"生產中",currency:"USD",od:todayISO()}};renderModal();return;}
-  if(a==="edit-order"){var ocid=t.getAttribute("data-cid")||S.selectedId;var oc=getC(ocid);var oo=(oc.orders||[]).filter(function(o){return o.id===t.getAttribute("data-oid");})[0];if(oo){S.modal={type:"order",customerId:ocid,draft:JSON.parse(JSON.stringify(oo))};renderModal();}return;}
+  if(a==="add-order"){
+    var nocid=t.getAttribute("data-cid")||S.selectedId;var noc=getC(nocid);if(!noc)return;
+    if(!Array.isArray(noc.orders))noc.orders=[];
+    var nord={id:uid(),createdAt:todayISO(),status:"生產中",currency:"USD",od:todayISO(),custDelivery:"",po:"",csNo:"",cpNo:"",pcNo:"",arNo:"",factory:"",factoryDelivery:"",shipDate:"",note:"",pn:"",qty:"",price:"",
+      items:[{id:uid(),pn:"",qty:"",price:"",desc:""}],
+      sop:(S.data.settings.orderSop||[]).map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};})};
+    noc.orders.unshift(nord);S.newOrderId=nord.id;save();render();
+    var fEl=document.querySelector('.oin[data-oid="'+nord.id+'"][data-oif="pn"]');
+    if(fEl){fEl.focus();fEl.scrollIntoView({block:"center",behavior:"smooth"});}
+    return;
+  }
   if(a==="del-order"){var docid=t.getAttribute("data-cid")||S.selectedId;var darr=getC(docid).orders,doo=darr.filter(function(o){return o.id===t.getAttribute("data-oid");})[0],oi=darr.indexOf(doo);softDelete("已刪除一筆訂單",function(){darr.splice(oi,1);},function(){darr.splice(Math.min(oi,darr.length),0,doo);});return;}
   if(a==="toggle-sop"||a==="add-sop"||a==="del-sop"){
     var scid=t.getAttribute("data-cid"),soid=t.getAttribute("data-oid");
@@ -1772,8 +1789,8 @@ document.addEventListener("click",function(e){
   if(a==="del-email"){readModal();S.modal.draft.emails.splice(parseInt(t.getAttribute("data-i"),10),1);renderModal();return;}
   if(a==="add-tier"){readModal();var q=document.getElementById("ti_q").value.trim();var pr=document.getElementById("ti_p").value.trim();if(q||pr){S.modal.draft.tiers=(S.modal.draft.tiers||[]).concat([{qty:q,price:pr}]);renderModal();}return;}
   if(a==="del-tier"){readModal();S.modal.draft.tiers.splice(parseInt(t.getAttribute("data-i"),10),1);renderModal();return;}
-  if(a==="add-oitem"){readModal();S.modal.draft.items=(S.modal.draft.items||[]).concat([{id:uid(),pn:"",qty:"",price:""}]);renderModal();return;}
-  if(a==="del-oitem"){readModal();S.modal.draft.items.splice(parseInt(t.getAttribute("data-i"),10),1);if(!S.modal.draft.items.length)S.modal.draft.items.push({id:uid(),pn:"",qty:"",price:""});renderModal();return;}
+  if(a==="add-oitem"){var aoo=orderByEl(t);if(aoo){if(!Array.isArray(aoo.items))aoo.items=[];aoo.items.push({id:uid(),pn:"",qty:"",price:"",desc:""});S.newOrderId=aoo.id;save();render();var nEl=document.querySelector('.oin[data-oid="'+aoo.id+'"][data-iid="'+aoo.items[aoo.items.length-1].id+'"][data-oif="pn"]');if(nEl)nEl.focus();}return;}
+  if(a==="del-oitem"){var doo0=orderByEl(t);if(doo0){doo0.items=(doo0.items||[]).filter(function(it){return it.id!==t.getAttribute("data-iid");});if(!doo0.items.length)doo0.items.push({id:uid(),pn:"",qty:"",price:"",desc:""});doo0.pn=orderPNs(doo0);S.newOrderId=doo0.id;save();render();}return;}
 
   if(a==="save-modal"){saveModal();return;}
   if(a==="copy-weekly"){var tx=genWeekly();navigator.clipboard&&navigator.clipboard.writeText(tx);t.textContent="已複製 ✓";setTimeout(function(){render();},1200);return;}
@@ -1807,6 +1824,8 @@ document.addEventListener("change",function(e){
   var oss=e.target.closest("[data-action='set-order-status']");
   if(oss){var occ=getC(oss.getAttribute("data-cid"));var oo2=occ&&(occ.orders||[]).filter(function(o){return o.id===oss.getAttribute("data-oid");})[0];
     if(oo2){oo2.status=oss.value;if(oss.value==="已出貨"&&!oo2.shipDate)oo2.shipDate=todayISO();save();render();}return;}
+  var ofc=e.target.closest("[data-of]");
+  if(ofc){var ofco=orderByEl(ofc);if(ofco){ofco[ofc.getAttribute("data-of")]=ofc.value;save();if(ofc.type==="date"||ofc.tagName==="SELECT")render();}return;}
   var tst=e.target.closest("[data-action='set-thread-stage']");
   if(tst){var pid2=tst.getAttribute("data-pid"),tid=tst.getAttribute("data-tid");var c2=getC(S.selectedId);var p2=c2.projects.filter(function(x){return x.id===pid2;})[0];var th=(p2.factorySubjects||[]).filter(function(t){return t.id===tid;})[0];if(th){th.stage=tst.value;p2.stage=rollupStage(p2);touch(p2);save();render();}return;}
   if(e.target.id==="n_img"){handleImageUpload(e.target.files,"images");return;}
@@ -1864,14 +1883,6 @@ function saveModal(){
   else if(m.type==="update"){if(!(d.note||"").trim()){alert("請輸入備註。");return;}var pu=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];pu.updates.push({id:uid(),date:d.date||todayISO(),note:d.note,emails:d.emails||[],thread:d.thread||""});touch(pu);}
   else if(m.type==="quote"){var pq=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];if(d.id){var qk=-1;pq.quotes.forEach(function(q,ix){if(q.id===d.id)qk=ix;});if(qk>=0)pq.quotes[qk]=Object.assign(pq.quotes[qk],{product:d.product,currency:d.currency,tiers:d.tiers||[],quoteDate:d.quoteDate,validUntil:d.validUntil,note:d.note});}else pq.quotes.push({id:uid(),product:d.product,currency:d.currency,tiers:d.tiers||[],quoteDate:d.quoteDate,validUntil:d.validUntil,note:d.note,createdAt:todayISO()});}
   else if(m.type==="sample"){var psm=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];if(d.id){var k=-1;psm.samples.forEach(function(s,ix){if(s.id===d.id)k=ix;});if(k>=0)psm.samples[k]=Object.assign(psm.samples[k],d);}else psm.samples.push(Object.assign({id:uid(),createdAt:todayISO()},d));}
-  else if(m.type==="order"){
-    d.items=(d.items||[]).filter(function(it){return (it.pn||"").trim()||(it.qty||"").trim()||(it.price||"").trim();});
-    if(!d.items.length&&!(d.po||"").trim()){alert("請至少填 PO# 或一個品項（料號/數量/單價）。");d.items=[{id:uid(),pn:"",qty:"",price:""}];return;}
-    if(!d.items.length)d.items=[{id:uid(),pn:"",qty:"",price:""}];
-    d.pn=d.items.map(function(it){return (it.pn||"").trim();}).filter(Boolean).join(", ");
-    d.qty=d.items.length===1?d.items[0].qty:"";
-    d.price=d.items.length===1?d.items[0].price:"";
-    var co=getC(m.customerId);if(!Array.isArray(co.orders))co.orders=[];if(d.id){var oi2=-1;co.orders.forEach(function(o,ix){if(o.id===d.id)oi2=ix;});if(oi2>=0)co.orders[oi2]=Object.assign(co.orders[oi2],d);}else co.orders.unshift(Object.assign({id:uid(),createdAt:todayISO(),sop:(S.data.settings.orderSop||[]).map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};})},d));}
   else if(m.type==="note"){if(!(d.content||"").trim()&&!(d.title||"").trim()&&!(d.images||[]).length){alert("筆記不能空白。");return;}if(d.id){var ni=-1;S.data.notes.forEach(function(n,ix){if(n.id===d.id)ni=ix;});if(ni>=0)S.data.notes[ni]=Object.assign(S.data.notes[ni],d);}else S.data.notes.unshift(Object.assign({id:uid(),createdAt:todayISO(),tags:[],images:[]},d));}
   else if(m.type==="vendor"){if(!(d.name||"").trim()){alert("請輸入廠商名稱。");return;}if(d.id){var vi=-1;S.data.vendors.forEach(function(v,ix){if(v.id===d.id)vi=ix;});if(vi>=0)S.data.vendors[vi]=Object.assign(S.data.vendors[vi],d);}else S.data.vendors.unshift(Object.assign({id:uid(),createdAt:todayISO(),contacts:[]},d));}
   else if(m.type==="hold"){var hd=rv("hold_date");if(hd){doHold(null,hd);return;}else{alert("請選一個提醒時間或日期。");return;}}
@@ -1885,7 +1896,10 @@ function saveModal(){
 /* hold 自訂日期：select 後關閉 picker，等按確定。改為按鈕直接套用 */
 document.addEventListener("input",function(e){
   if(e.target.id==="hold_date"){/* 等使用者按確定 */}
-  if(e.target.closest&&e.target.closest("#o_items")){var oel=document.getElementById("o_amt");if(oel){var otot=0,orws=document.querySelectorAll("#o_items .oitrow");for(var oj=0;oj<orws.length;oj++){otot+=num(orws[oj].querySelector(".oit-qty").value)*num(orws[oj].querySelector(".oit-price").value);}oel.textContent=fmtMoney(otot);}}
+  var ofld=e.target.closest("[data-of]");
+  if(ofld){var ofo=orderByEl(ofld);if(ofo){ofo[ofld.getAttribute("data-of")]=ofld.value;save();}return;}
+  var oifld=e.target.closest("[data-oif]");
+  if(oifld){var oio=orderByEl(oifld);if(oio){var oit=(oio.items||[]).filter(function(x){return x.id===oifld.getAttribute("data-iid");})[0];if(oit){oit[oifld.getAttribute("data-oif")]=oifld.value;oio.pn=orderPNs(oio);save();updateOrderAmtDom(oio);}}return;}
   var qf=e.target.closest("[data-qf]");
   if(qf&&S.quoteId){var doc=QD(S.quoteId);if(!doc)return;var f=qf.getAttribute("data-qf");
     if(f!=="custpick"){doc[f]=qf.value;save();refreshQuoteSheet();}return;}
