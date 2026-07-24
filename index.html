@@ -398,23 +398,24 @@ body.colresizing .oin{pointer-events:none}
 .oitems td{vertical-align:middle}
 .oitems .oremark{font-size:12.5px;padding:2px 6px;resize:vertical;min-height:24px;line-height:1.45;white-space:pre-wrap;font-family:inherit;display:block;field-sizing:content}
 .ocard.onew{box-shadow:0 0 0 2px var(--violet),0 6px 20px rgba(94,106,210,.16)}
-/* 報價單依客戶分組 */
-.qgroup{margin-top:14px;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.78);border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(90,70,80,.06)}
-.qghead{display:flex;align-items:center;gap:9px;padding:11px 16px;background:rgba(94,106,210,.07);border-bottom:1px solid var(--line)}
-.qghead .qgname{font-weight:800;font-size:15px;color:var(--ink)}
-.qghead .qgnew{margin-left:auto}
-.qtable{width:100%;border-collapse:collapse}
-.qtable td{padding:10px 14px;border-bottom:1px solid #F1F1EE;vertical-align:middle}
-.qtable tr:last-child td{border-bottom:none}
-.qrow{cursor:pointer}
-.qrow:hover td{background:rgba(94,106,210,.045)}
-.qdate{color:#6b6680;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600;font-size:13px}
-.qsum{font-size:13.5px;color:var(--ink)}
-.qsub{font-size:12px;color:var(--muted);margin-top:2px}
-.qmetacell{white-space:nowrap;font-size:12px;color:#6b6680}
-.qactcell{white-space:nowrap;text-align:right}
-.qtable .del:hover{color:#fb7185}
-@media(max-width:640px){.qtable td:nth-child(3){display:none}}
+/* 報價單依客戶分組（柔和卡片列，跟全站一致） */
+.qgroupsec{margin-top:22px}
+.qghead{display:flex;align-items:center;gap:9px;margin:0 4px 9px;padding-left:2px}
+.qgdot{width:8px;height:8px;border-radius:999px;background:var(--violet);flex:none}
+.qgname{font-weight:800;font-size:16px;color:var(--ink)}
+.qgnew{margin-left:auto}
+.qrows{display:flex;flex-direction:column;gap:9px}
+.qrow{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:rgba(255,255,255,.66);backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15);border:1px solid rgba(255,255,255,.8);border-radius:14px;padding:12px 15px;box-shadow:0 2px 8px rgba(90,70,80,.05);cursor:pointer;transition:transform .14s,box-shadow .14s}
+.qrow:hover{box-shadow:0 8px 22px rgba(90,70,80,.11);transform:translateY(-1px)}
+.qdate{flex:none;width:86px;font-weight:700;font-size:12.5px;color:#8a8598;font-variant-numeric:tabular-nums}
+.qmid{flex:1;min-width:0}
+.qsum{font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qsum .qcount{color:var(--muted);font-size:12.5px;font-weight:600}
+.qsub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qright{flex:none;display:flex;align-items:center;gap:8px}
+.qcur{font-size:12px;color:#8a8598;font-weight:600}
+.qrow .iconmini.del:hover{color:#fb7185}
+@media(max-width:640px){.qcur{display:none}}
 /* 料號申請緊湊表格 */
 .ptwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px rgba(90,70,80,.06);margin-top:8px}
 .ptable{width:100%;border-collapse:collapse;table-layout:fixed;min-width:720px}
@@ -1464,22 +1465,22 @@ function renderQuotes(){
   groups.sort(function(a,b){return a.name.localeCompare(b.name,"zh-Hant");});
   h+=groups.map(function(g){
     g.list.sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
-    var head='<div class="qghead"><span class="qgname">'+esc(g.name)+'</span><span class="count">'+g.list.length+' 份</span>'+
+    var head='<div class="qghead"><span class="qgdot"></span><span class="qgname">'+esc(g.name)+'</span><span class="count">'+g.list.length+' 份</span>'+
       (g.cid?'<button class="btn-soft qgnew" data-action="new-quote-for" data-cid="'+g.cid+'" style="padding:5px 11px">＋ 給這客戶開一張</button>':"")+'</div>';
     var rows=g.list.map(function(q){
       var chip='<span class="chip" style="'+(q.channel==="微信"?"background:var(--grl);color:#357B50":"background:var(--bll);color:#2F6BA6")+'">'+esc(q.channel||"Email")+'</span>';
-      var first=(q.items[0]||{});var sum=esc(first.desc||first.itemNo||"（未填品項）")+(q.items.length>1?('　等 '+q.items.length+' 項'):'');
+      var first=(q.items[0]||{});var sum=esc(first.desc||first.itemNo||"（未填品項）")+(q.items.length>1?(' <span class="qcount">· 等 '+q.items.length+' 項</span>'):'');
       var c2=q.customerId?getC(q.customerId):null;
       var proj=(c2&&q.projectId)?(c2.projects||[]).filter(function(p){return p.id===q.projectId;})[0]:null;
-      return '<tr class="qrow" data-action="open-quote" data-qdid="'+q.id+'">'+
-        '<td><span class="qdate">'+esc(q.date||"—")+'</span></td>'+
-        '<td><div class="qsum line1">'+sum+'</div>'+(proj?'<div class="qsub">📎 '+esc(proj.customerSubject)+'</div>':"")+'</td>'+
-        '<td class="qmetacell">'+esc(q.currency||"")+'　'+chip+'</td>'+
-        '<td class="qactcell"><button class="iconmini" data-action="dup-quote" data-qdid="'+q.id+'" title="複製一份">'+icon("box",14)+'</button>'+
-        '<button class="iconmini del" data-action="del-quote-doc" data-qdid="'+q.id+'" title="刪除">'+icon("trash",14)+'</button></td>'+
-        '</tr>';
+      return '<div class="qrow" data-action="open-quote" data-qdid="'+q.id+'">'+
+        '<span class="qdate">'+esc(q.date||"—")+'</span>'+
+        '<div class="qmid"><div class="qsum">'+sum+'</div>'+(proj?'<div class="qsub">📎 '+esc(proj.customerSubject)+'</div>':"")+'</div>'+
+        '<div class="qright"><span class="qcur">'+esc(q.currency||"")+'</span>'+chip+
+        '<button class="iconmini" data-action="dup-quote" data-qdid="'+q.id+'" title="複製一份">'+icon("box",15)+'</button>'+
+        '<button class="iconmini del" data-action="del-quote-doc" data-qdid="'+q.id+'" title="刪除">'+icon("trash",15)+'</button></div>'+
+        '</div>';
     }).join("");
-    return '<div class="qgroup">'+head+'<table class="qtable"><tbody>'+rows+'</tbody></table></div>';
+    return '<div class="qgroupsec">'+head+'<div class="qrows">'+rows+'</div></div>';
   }).join("");
   return h;
 }
