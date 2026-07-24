@@ -396,7 +396,19 @@ body.colresizing .oin{pointer-events:none}
 .ometa label .oin{font-size:12.5px;color:var(--ink);margin-top:1px}
 .oitems input.oin{font-size:12.5px;padding:2px 6px}
 .oitems td{vertical-align:middle}
+.oitems .oremark{font-size:12.5px;padding:2px 6px;resize:vertical;min-height:24px;line-height:1.45;white-space:pre-wrap;font-family:inherit;display:block;field-sizing:content}
 .ocard.onew{box-shadow:0 0 0 2px var(--violet),0 6px 20px rgba(94,106,210,.16)}
+/* 料號申請緊湊表格 */
+.ptwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px rgba(90,70,80,.06);margin-top:8px}
+.ptable{width:100%;border-collapse:collapse;table-layout:fixed;min-width:720px}
+.ptable th{background:#FAFAF9;font-size:11px;color:var(--muted);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-weight:600;white-space:nowrap}
+.ptable td{padding:2px 6px;border-bottom:1px solid #F1F1EE;vertical-align:middle;overflow:hidden}
+.ptable tr:last-child td{border-bottom:none}
+.ptable tbody tr:hover{background:#FBFBF9}
+.ptable .oin{font-size:12.5px;padding:4px 6px}
+.ptable .ptnote{resize:vertical;min-height:26px;line-height:1.45;white-space:pre-wrap;font-family:inherit;field-sizing:content}
+.ptable .del{opacity:0}
+.ptable tr:hover .del{opacity:1}
 .ochev{flex:none;color:#c3bcac;display:flex;padding:2px;border-radius:6px;transition:transform .16s}
 .ochev:hover{background:#f1eee6;color:var(--ink)}
 .ochev.open{transform:rotate(90deg)}
@@ -1233,7 +1245,7 @@ function orderCard(c,o,withCust){
         '<td><input class="oin" '+ia+' data-oif="price" inputmode="decimal" value="'+esc(it.price)+'" placeholder="單價"></td>'+
         '<td style="font-weight:600;white-space:nowrap" id="oiamt-'+it.id+'">'+fmtMoney(num(it.qty)*num(it.price))+'</td>'+
         '<td><input class="oin" '+ia+' data-oif="desc" value="'+esc(it.desc)+'" placeholder="品名 / 說明"></td>'+
-        '<td><input class="oin" '+ia+' data-oif="remark" value="'+esc(it.remark)+'" placeholder="備註"></td>'+
+        '<td><textarea class="oin oremark" '+ia+' data-oif="remark" rows="1" placeholder="備註">'+esc(it.remark)+'</textarea></td>'+
         '<td><button class="iconmini del" data-action="del-oitem" data-ocid="'+c.id+'" data-oid="'+o.id+'" data-iid="'+it.id+'"'+(its.length<2?' style="visibility:hidden"':'')+'>'+icon("x",12)+'</button></td>'+
         '</tr>';
     }).join("")+
@@ -1289,28 +1301,28 @@ function renderParts(){
   PART_STATUS.forEach(function(s){tabs.push([s,s,all.filter(function(p){return p.status===s;}).length]);});
   h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="pfilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
   if(!list.length)return h+'<div class="empty"><div class="big">🧩</div><p>'+(all.length?"這個狀態下沒有申請。":"還沒有料號申請。丟 BOM 給工程師後，點「新增申請」記一筆。")+'</p></div>';
-  h+='<div class="olist">'+list.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");}).map(partCard).join("")+'</div>';
+  var sorted=list.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  h+='<div class="ptwrap"><table class="ptable"><colgroup><col style="width:118px"><col><col><col style="width:150px"><col style="width:90px"><col style="width:28px"></colgroup>'+
+    '<thead><tr><th>申請日期</th><th>OA 主旨</th><th>狀況說明</th><th>客戶</th><th>狀態</th><th></th></tr></thead><tbody>'+
+    sorted.map(partRow).join("")+'</tbody></table></div>';
   return h;
 }
-function partCard(p){
+function partRow(p){
   var da='data-prid="'+p.id+'"';
-  var stSel='<select class="statussel sm" data-action="set-part-status" data-prid="'+p.id+'" style="'+PART_STYLE[p.status]+'">'+
+  var stSel='<select class="statussel sm" data-action="set-part-status" data-prid="'+p.id+'" style="'+PART_STYLE[p.status]+';font-size:11px;padding:3px 20px 3px 8px">'+
     PART_STATUS.map(function(s){return '<option'+(s===p.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
-  var custSel='<select class="oin" '+da+' data-pf="customer" style="max-width:180px;font-size:12.5px;color:#4A55BC;margin-top:1px"><option value="">— 未綁客戶 —</option>'+
+  var custSel='<select class="oin" '+da+' data-pf="customer" style="color:#4A55BC"><option value="">— 未綁 —</option>'+
     S.data.customers.map(function(c){return '<option value="'+c.id+'"'+(p.customer===c.id?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>';
-  var h='<div class="ocard">';
-  h+='<div class="ohead">'+stSel+
-    '<input class="oin" '+da+' data-pf="subject" value="'+esc(p.subject)+'" placeholder="OA 主旨（例如：Wicked Chili 3 款新料號申請）" style="flex:1;min-width:120px;font-weight:700">'+
-    '<div class="row" style="gap:0;flex:none;flex-wrap:nowrap"><button class="iconmini del" data-action="del-part" data-prid="'+p.id+'">'+icon("trash",14)+'</button></div></div>';
-  h+='<div class="ometa">'+
-    '<label>申請日期<input class="oin" type="date" '+da+' data-pf="date" value="'+esc(p.date)+'"></label>'+
-    '<label>客戶'+custSel+'</label>'+
-    '</div>';
-  h+='<label style="display:block;margin-top:9px"><span style="font-size:11px;color:var(--muted)">狀況說明</span>'+
-    '<textarea class="oin" '+da+' data-pf="note" rows="2" placeholder="目前進度 / 工程師回覆 / 待補資料…" style="resize:vertical;border:1px solid var(--line);background:rgba(255,255,255,.5);margin-top:2px;display:block">'+esc(p.note)+'</textarea></label>';
-  h+='</div>';
-  return h;
+  return '<tr>'+
+    '<td><input class="oin" type="date" '+da+' data-pf="date" value="'+esc(p.date)+'"></td>'+
+    '<td><input class="oin" '+da+' data-pf="subject" value="'+esc(p.subject)+'" placeholder="OA 主旨" style="font-weight:600"></td>'+
+    '<td><textarea class="oin ptnote" '+da+' data-pf="note" rows="1" placeholder="狀況說明">'+esc(p.note)+'</textarea></td>'+
+    '<td>'+custSel+'</td>'+
+    '<td>'+stSel+'</td>'+
+    '<td><button class="iconmini del" data-action="del-part" data-prid="'+p.id+'">'+icon("x",12)+'</button></td>'+
+    '</tr>';
 }
+function partByEl(el){return (S.data.partReqs||[]).filter(function(p){return p.id===el.getAttribute("data-prid");})[0];}
 function partByEl(el){return (S.data.partReqs||[]).filter(function(p){return p.id===el.getAttribute("data-prid");})[0];}
 
 /* ---------- 小抄 ---------- */
