@@ -398,6 +398,23 @@ body.colresizing .oin{pointer-events:none}
 .oitems td{vertical-align:middle}
 .oitems .oremark{font-size:12.5px;padding:2px 6px;resize:vertical;min-height:24px;line-height:1.45;white-space:pre-wrap;font-family:inherit;display:block;field-sizing:content}
 .ocard.onew{box-shadow:0 0 0 2px var(--violet),0 6px 20px rgba(94,106,210,.16)}
+/* 報價單依客戶分組 */
+.qgroup{margin-top:14px;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.78);border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(90,70,80,.06)}
+.qghead{display:flex;align-items:center;gap:9px;padding:11px 16px;background:rgba(94,106,210,.07);border-bottom:1px solid var(--line)}
+.qghead .qgname{font-weight:800;font-size:15px;color:var(--ink)}
+.qghead .qgnew{margin-left:auto}
+.qtable{width:100%;border-collapse:collapse}
+.qtable td{padding:10px 14px;border-bottom:1px solid #F1F1EE;vertical-align:middle}
+.qtable tr:last-child td{border-bottom:none}
+.qrow{cursor:pointer}
+.qrow:hover td{background:rgba(94,106,210,.045)}
+.qdate{color:#6b6680;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600;font-size:13px}
+.qsum{font-size:13.5px;color:var(--ink)}
+.qsub{font-size:12px;color:var(--muted);margin-top:2px}
+.qmetacell{white-space:nowrap;font-size:12px;color:#6b6680}
+.qactcell{white-space:nowrap;text-align:right}
+.qtable .del:hover{color:#fb7185}
+@media(max-width:640px){.qtable td:nth-child(3){display:none}}
 /* 料號申請緊湊表格 */
 .ptwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 10px rgba(90,70,80,.06);margin-top:8px}
 .ptable{width:100%;border-collapse:collapse;table-layout:fixed;min-width:720px}
@@ -1434,15 +1451,36 @@ function renderQuotes(){
   var h='<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><h2 class="sectitle">📄 報價單</h2><p class="subt">照公司格式做報價單，填好按「列印 / 存 PDF」直接出給客戶。成本試算只有你看得到。</p></div>'+
     '<div class="row"><button class="btn-soft" data-action="edit-qcompany" style="padding:7px 14px">公司抬頭</button><button class="btn-dark" data-action="new-quote">'+icon("plus",16)+' 新增報價單</button></div></div>';
   if(!docs.length)return h+'<div class="empty"><div class="big">📄</div><p>還沒有報價單，點「新增報價單」開始</p></div>';
-  h+='<div class="grid cards">'+docs.map(function(q){
-    var qc2=q.customerId?getC(q.customerId):null;
-    var proj=(qc2&&q.projectId)?(qc2.projects||[]).filter(function(p){return p.id===q.projectId;})[0]:null;
-    return '<div class="pcard" style="cursor:pointer" data-action="open-quote" data-qdid="'+q.id+'"><div class="ctop"><div class="cmeta"><div class="cname">'+esc(q.to||"（未填客戶）")+'</div><div class="ctype">'+esc(q.date)+' · '+q.items.length+' 個品項 · '+esc(q.currency)+'</div></div>'+
-    '<span class="chip" style="flex:none;'+(q.channel==="微信"?"background:var(--grl);color:#357B50":"background:var(--bll);color:#2F6BA6")+'">'+esc(q.channel||"Email")+'</span></div>'+
-    (proj?'<div class="muted" style="font-size:12px">📎 '+esc(proj.customerSubject)+'</div>':"")+
-    '<div class="row" style="border-top:1px dashed var(--line);padding-top:9px">'+q.items.slice(0,2).map(function(it){return '<span class="tag g line1" style="max-width:100%">'+esc(it.desc||it.itemNo||"（品項）")+'</span>';}).join("")+'</div>'+
-    '<div class="row"><button class="qb" data-action="dup-quote" data-qdid="'+q.id+'">複製一份</button><button class="qb" data-action="del-quote-doc" data-qdid="'+q.id+'">刪除</button></div></div>';
-  }).join("")+'</div>';
+  h+='<p class="subt" style="margin:-6px 0 6px">依客戶分組，同一個客戶的歷史報價由新到舊列在一起。點任一列打開；右側可複製或刪除。</p>';
+  // 依客戶分組
+  var groups=[],gmap={};
+  docs.forEach(function(q){
+    var c=q.customerId?getC(q.customerId):null;
+    var key=c?("c:"+c.id):("t:"+((q.to||"").trim()||"__none__"));
+    var name=c?c.name:((q.to||"").trim()||"（未指定客戶）");
+    if(!gmap[key]){gmap[key]={key:key,name:name,cid:c?c.id:null,list:[]};groups.push(gmap[key]);}
+    gmap[key].list.push(q);
+  });
+  groups.sort(function(a,b){return a.name.localeCompare(b.name,"zh-Hant");});
+  h+=groups.map(function(g){
+    g.list.sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+    var head='<div class="qghead"><span class="qgname">'+esc(g.name)+'</span><span class="count">'+g.list.length+' 份</span>'+
+      (g.cid?'<button class="btn-soft qgnew" data-action="new-quote-for" data-cid="'+g.cid+'" style="padding:5px 11px">＋ 給這客戶開一張</button>':"")+'</div>';
+    var rows=g.list.map(function(q){
+      var chip='<span class="chip" style="'+(q.channel==="微信"?"background:var(--grl);color:#357B50":"background:var(--bll);color:#2F6BA6")+'">'+esc(q.channel||"Email")+'</span>';
+      var first=(q.items[0]||{});var sum=esc(first.desc||first.itemNo||"（未填品項）")+(q.items.length>1?('　等 '+q.items.length+' 項'):'');
+      var c2=q.customerId?getC(q.customerId):null;
+      var proj=(c2&&q.projectId)?(c2.projects||[]).filter(function(p){return p.id===q.projectId;})[0]:null;
+      return '<tr class="qrow" data-action="open-quote" data-qdid="'+q.id+'">'+
+        '<td><span class="qdate">'+esc(q.date||"—")+'</span></td>'+
+        '<td><div class="qsum line1">'+sum+'</div>'+(proj?'<div class="qsub">📎 '+esc(proj.customerSubject)+'</div>':"")+'</td>'+
+        '<td class="qmetacell">'+esc(q.currency||"")+'　'+chip+'</td>'+
+        '<td class="qactcell"><button class="iconmini" data-action="dup-quote" data-qdid="'+q.id+'" title="複製一份">'+icon("box",14)+'</button>'+
+        '<button class="iconmini del" data-action="del-quote-doc" data-qdid="'+q.id+'" title="刪除">'+icon("trash",14)+'</button></td>'+
+        '</tr>';
+    }).join("");
+    return '<div class="qgroup">'+head+'<table class="qtable"><tbody>'+rows+'</tbody></table></div>';
+  }).join("");
   return h;
 }
 function quoteEditor(doc){
@@ -1782,7 +1820,7 @@ document.addEventListener("click",function(e){
 
   if(a==="overlay"){return;}
   if(a==="close-modal"){S.modal=null;renderModal();return;}
-  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";S.newOrderId=null;S.bindTodo=null;render();window.scrollTo(0,0);return;}
+  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";S.newOrderId=null;S.bindTodo=null;S.quoteId=null;render();window.scrollTo(0,0);return;}
   if(a==="open"){e.preventDefault();S.selectedId=id;S.view="detail";S.newOrderId=null;render();window.scrollTo(0,0);return;}
   if(a==="cfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="nfilter"){S.filter=t.getAttribute("data-f");render();return;}
