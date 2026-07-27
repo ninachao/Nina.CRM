@@ -1625,96 +1625,94 @@ function exportQuoteExcel(doc){
 }
 async function buildQuoteXlsx(doc){
   var qc=S.data.quoteCompany;var M=!!doc.showMOQ;
-  var CJK="新細明體",EN="Times New Roman";
+  var EN="Times New Roman"; // 全部字型統一 Times New Roman
   var wb=new ExcelJS.Workbook();
   var ws=wb.addWorksheet("報價",{views:[{showGridLines:false}]});
-  // 欄位（可見）＋（隱藏的成本/公式）
-  var vis=[["No.",5],["Picture",15],["Item No",13],["Description",46]];
+  // 版面：A 欄為左邊界(空白)，內容從 B 欄起；不放 No. 欄
+  var vis=[["Picture",15],["Item No",28.875],["Description",57.625]];
   if(M)vis.push(["MOQ",8]);
-  vis.push(["Price/Pcs\nfor "+(doc.qtyLabel||""),15],["Remark",30]);
-  var cost=[["成本 Cost",11],["匯率÷ Rate",10],["係數÷ Factor",11],["加項＋ Add",9],["建議售價(公式) Sugg",16]];
-  ws.columns=vis.concat(cost).map(function(c){return {width:c[1]};});
-  var nVis=vis.length,total=nVis+cost.length;
-  for(var ci=nVis+1;ci<=total;ci++)ws.getColumn(ci).hidden=true;
-  var lastVis=colLetter(nVis);
-  function setCell(addr,val,font,align,fill,border){var c=ws.getCell(addr);c.value=val;if(font)c.font=font;if(align)c.alignment=align;if(fill)c.fill=fill;if(border)c.border=border;return c;}
+  vis.push(["Price/Pcs\nfor "+(doc.qtyLabel||""),10.5],["Remark",30.125]);
+  var cost=[["成本",11.875],["匯率",10],["利潤加成",12],["加項",9],["價格",19]];
+  var nVis=vis.length;
+  ws.getColumn(1).width=9; // A 左邊界
+  var allCols=vis.concat(cost);
+  for(var k=0;k<allCols.length;k++)ws.getColumn(2+k).width=allCols[k][1];
+  for(var ci=2+nVis;ci<=1+nVis+cost.length;ci++)ws.getColumn(ci).hidden=true; // 成本～價格 預設隱藏
+  var C0=2; // 內容起始欄(B)
+  var lastVis=colLetter(1+nVis); // 最右可見欄
+  function setCell(addr,val,font,align,fill,border){var c=ws.getCell(addr);c.value=val;c.font=font||{name:EN,size:11};if(align)c.alignment=align;if(fill)c.fill=fill;if(border)c.border=border;return c;}
   var thin={style:"thin",color:{argb:"FF000000"}};var box={top:thin,left:thin,bottom:thin,right:thin};
   var wrapMid={vertical:"middle",horizontal:"center",wrapText:true};
   var wrapLeft={vertical:"middle",horizontal:"left",wrapText:true};
-  // ── 抬頭 logo（固定在最上，跨欄，不會跑掉）──
+  function estLines(txt,cpl){if(!txt)return 1;return String(txt).split("\n").reduce(function(n,seg){return n+Math.max(1,Math.ceil((seg.length||1)/cpl));},0);}
+  // ── 抬頭 logo（oneCell 固定在 B 欄，不會跑掉，保持比例）──
   var logoDim=await imgDim(QHEAD_IMG);
-  var headRows=2;
-  ws.mergeCells("A1:"+lastVis+headRows);
   try{
     var logoId=wb.addImage({base64:QHEAD_IMG.split(",")[1],extension:"jpeg"});
-    // 依可見欄寬估總寬(px)，logo 佔約 76%
-    var totPx=vis.reduce(function(s,c){return s+(c[1]*7+5);},0);
-    var lw=Math.min(totPx*0.78,760);var lh=logoDim?Math.round(lw*logoDim.h/logoDim.w):70;
-    ws.getRow(1).height=Math.max(20,(lh/2)*0.76);ws.getRow(2).height=Math.max(20,(lh/2)*0.76);
-    ws.addImage(logoId,{tl:{col:0.1,row:0.1},ext:{width:lw,height:lh},editAs:"oneCell"});
-  }catch(e){setCell("A1",qc.en||"COMART CORPORATION",{name:EN,size:16,bold:true},wrapMid);}
+    var lw=700;var lh=logoDim?Math.round(lw*logoDim.h/logoDim.w):61;
+    var rowH=Math.max(20,(lh/2)/1.333);ws.getRow(1).height=rowH;ws.getRow(2).height=rowH;
+    ws.mergeCells("B1:"+lastVis+"2");
+    ws.addImage(logoId,{tl:{col:1,row:0.03},ext:{width:lw,height:lh}});
+  }catch(e){ws.mergeCells("B1:"+lastVis+"2");setCell("B1",qc.en||"COMART CORPORATION",{name:EN,size:16,bold:true},wrapMid);}
   // ── 標題 ──
-  var rTitle=headRows+1;ws.mergeCells("A"+rTitle+":"+lastVis+rTitle);
-  setCell("A"+rTitle,"QUOTATION LIST",{name:EN,size:16,bold:true},{horizontal:"center",vertical:"middle"});
-  ws.getRow(rTitle).height=24;
+  ws.mergeCells("B3:"+lastVis+"3");
+  setCell("B3","QUOTATION LIST",{name:EN,size:16,bold:true},{horizontal:"center",vertical:"middle"});
+  ws.getRow(3).height=24;
   // ── TO / ATTENTION / TERM ・ TEL / DATE / CURRENCY ──
-  var rInfo1=rTitle+1,rInfo2=rTitle+2;
-  var lf={name:EN,size:11,bold:true};
-  // 依可見欄數分三份
-  var third=Math.max(1,Math.floor(nVis/3));
-  function span(rowN,parts){
-    // parts: array of 3 strings placed at 1, third+1, 2*third+1
-    var starts=[1,third+1,2*third+1];
-    for(var i=0;i<3;i++){var cA=colLetter(starts[i]);var cB=colLetter(i<2?starts[i+1]-1:nVis);ws.mergeCells(cA+rowN+":"+cB+rowN);setCell(cA+rowN,parts[i],lf,{horizontal:"left",vertical:"middle"});}
+  function infoRow(rowN,parts){
+    var cs=C0,ce=1+nVis,n=ce-cs+1,w=Math.max(1,Math.round(n/3));
+    var g=[[cs,cs+w-1],[cs+w,cs+2*w-1],[cs+2*w,ce]];
+    for(var i=0;i<3;i++){var a=colLetter(g[i][0]),b=colLetter(Math.min(g[i][1],ce));if(g[i][1]>g[i][0])ws.mergeCells(a+rowN+":"+b+rowN);setCell(a+rowN,parts[i],{name:EN,size:11,bold:true},{horizontal:"left",vertical:"middle"});}
   }
-  span(rInfo1,["TO: "+(doc.to||""),"ATTENTION: "+(doc.attention||""),"TERM: "+(doc.incoterm||"")]);
-  span(rInfo2,["TEL: "+(doc.tel||""),"DATE: "+(doc.date||""),"CURRENCY: "+(doc.currency||"")]);
+  infoRow(4,["TO: "+(doc.to||""),"ATTENTION: "+(doc.attention||""),"TERM: "+(doc.incoterm||"")]);
+  infoRow(5,["TEL: "+(doc.tel||""),"DATE: "+(doc.date||""),"CURRENCY: "+(doc.currency||"")]);
   // ── 表頭 ──
-  var rHead=rInfo2+1;
+  var rHead=6;
   var heads=vis.map(function(c){return c[0];}).concat(cost.map(function(c){return c[0];}));
   var fillHead={type:"pattern",pattern:"solid",fgColor:{argb:"FFF2F2F2"}};
-  for(var hi=0;hi<heads.length;hi++){setCell(colLetter(hi+1)+rHead,heads[hi],{name:EN,size:11,bold:true},wrapMid,fillHead,box);}
+  for(var hi=0;hi<heads.length;hi++){setCell(colLetter(C0+hi)+rHead,heads[hi],{name:EN,size:11,bold:true},wrapMid,fillHead,box);}
   ws.getRow(rHead).height=30;
   // ── 品項 ──
   var r=rHead+1;
   var imgTasks=[];
   for(var i=0;i<doc.items.length;i++){
     var it=doc.items[i];var rowN=r+i;
-    ws.getRow(rowN).height=54;
-    var col=1;
-    setCell(colLetter(col++)+rowN,(i+1)+".0",{name:EN,size:11},wrapMid,null,box); // No.
+    var dLines=estLines(it.desc,54),rLines=estLines(it.remark,28);
+    ws.getRow(rowN).height=Math.min(220,Math.max(54,Math.max(dLines,rLines)*13+10));
+    var col=C0;
     setCell(colLetter(col++)+rowN,"",null,wrapMid,null,box); // Picture (image later)
-    var picCol0=col-2; // 0-based index of picture column
-    setCell(colLetter(col++)+rowN,it.itemNo||"",{name:CJK,size:11},wrapMid,null,box);
-    setCell(colLetter(col++)+rowN,it.desc||"",{name:CJK,size:11},wrapLeft,null,box);
-    if(M)setCell(colLetter(col++)+rowN,it.moq||"",{name:CJK,size:11},wrapMid,null,box);
-    var pc=setCell(colLetter(col++)+rowN,it.price!==""&&it.price!=null&&!isNaN(parseFloat(it.price))?parseFloat(it.price):(it.price||""),{name:EN,size:11},wrapMid,null,box);
-    setCell(colLetter(col++)+rowN,it.remark||"",{name:CJK,size:11},wrapLeft,null,box);
-    // 隱藏成本/公式
-    var cCost=colLetter(nVis+1),cRate=colLetter(nVis+2),cFac=colLetter(nVis+3),cAdd=colLetter(nVis+4),cSug=colLetter(nVis+5);
+    var picCol0=C0-1; // 0-based index of picture column(B=1)
+    setCell(colLetter(col++)+rowN,it.itemNo||"",null,wrapMid,null,box);
+    setCell(colLetter(col++)+rowN,it.desc||"",null,wrapLeft,null,box);
+    if(M)setCell(colLetter(col++)+rowN,it.moq||"",null,wrapMid,null,box);
+    setCell(colLetter(col++)+rowN,it.price!==""&&it.price!=null&&!isNaN(parseFloat(it.price))?parseFloat(it.price):(it.price||""),null,wrapMid,null,box);
+    setCell(colLetter(col++)+rowN,it.remark||"",null,wrapLeft,null,box);
+    // 隱藏成本/公式（成本 匯率 利潤加成 加項 價格）
+    var base=2+nVis;
+    var cCost=colLetter(base),cRate=colLetter(base+1),cFac=colLetter(base+2),cAdd=colLetter(base+3),cSug=colLetter(base+4);
     var addSum=(it.addons||[]).reduce(function(s,a){var x=parseFloat(a.amt);return s+(isNaN(x)?0:x);},0);
-    setCell(cCost+rowN,it.cost!==""&&!isNaN(parseFloat(it.cost))?parseFloat(it.cost):(it.cost||""),{name:EN,size:11},wrapMid,null,box);
-    setCell(cRate+rowN,it.rate!==""&&!isNaN(parseFloat(it.rate))?parseFloat(it.rate):(it.rate||""),{name:EN,size:11},wrapMid,null,box);
-    setCell(cFac+rowN,it.factor!==""&&!isNaN(parseFloat(it.factor))?parseFloat(it.factor):(it.factor||""),{name:EN,size:11},wrapMid,null,box);
-    setCell(cAdd+rowN,addSum,{name:EN,size:11},wrapMid,null,box);
+    setCell(cCost+rowN,it.cost!==""&&!isNaN(parseFloat(it.cost))?parseFloat(it.cost):(it.cost||""),null,wrapMid,null,box);
+    setCell(cRate+rowN,it.rate!==""&&!isNaN(parseFloat(it.rate))?parseFloat(it.rate):(it.rate||""),null,wrapMid,null,box);
+    setCell(cFac+rowN,it.factor!==""&&!isNaN(parseFloat(it.factor))?parseFloat(it.factor):(it.factor||""),null,wrapMid,null,box);
+    setCell(cAdd+rowN,addSum,null,wrapMid,null,box);
     ws.getCell(cSug+rowN).value={formula:'IF(AND(ISNUMBER('+cCost+rowN+'),'+cRate+rowN+'>0,'+cFac+rowN+'>0),ROUND('+cCost+rowN+'/'+cRate+rowN+'/'+cFac+rowN+'+'+cAdd+rowN+',2),"")'};
     ws.getCell(cSug+rowN).font={name:EN,size:11};ws.getCell(cSug+rowN).alignment=wrapMid;ws.getCell(cSug+rowN).border=box;
-    if(it.img){imgTasks.push({src:it.img,col0:picCol0,row0:rowN-1});}
+    if(it.img){imgTasks.push({src:it.img,col0:picCol0,row0:rowN-1,rowH:ws.getRow(rowN).height});}
   }
   // 圖片（嵌在 Picture 欄，置中、保持比例）
   for(var t=0;t<imgTasks.length;t++){
     var tk=imgTasks[t];var dim=await imgDim(tk.src);if(!dim)continue;
-    var boxW=15*7+5,boxH=54*1.333;var scale=Math.min((boxW-8)/dim.w,(boxH-8)/dim.h,1);
+    var boxW=15*7+5,boxH=(tk.rowH||54)*1.333;var scale=Math.min((boxW-8)/dim.w,(boxH-8)/dim.h,1);
     var w=Math.round(dim.w*scale),hh=Math.round(dim.h*scale);
     var offX=(boxW-w)/2/boxW,offY=(boxH-hh)/2/boxH;
     var ext=tk.src.indexOf("image/png")>=0?"png":"jpeg";
     var imId=wb.addImage({base64:tk.src.split(",")[1],extension:ext});
-    ws.addImage(imId,{tl:{col:tk.col0+offX,row:tk.row0+offY},ext:{width:w,height:hh},editAs:"oneCell"});
+    ws.addImage(imId,{tl:{col:tk.col0+offX,row:tk.row0+offY},ext:{width:w,height:hh}});
   }
   // ── Remark 區 ──
-  var rRk=r+doc.items.length+0;
+  var rRk=r+doc.items.length;
   var lines=["Remark:"];(doc.remarks||"").split(/\n/).forEach(function(l){lines.push(l);});
-  for(var li=0;li<lines.length;li++){var rr=rRk+li;ws.mergeCells("A"+rr+":"+lastVis+rr);setCell("A"+rr,lines[li],{name:CJK,size:10,bold:li===0},{horizontal:"left",vertical:"middle"});}
+  for(var li=0;li<lines.length;li++){var rr=rRk+li;ws.mergeCells("B"+rr+":"+lastVis+rr);setCell("B"+rr,lines[li],{name:EN,size:10,bold:li===0},{horizontal:"left",vertical:"middle"});}
   // 輸出
   var buf=await wb.xlsx.writeBuffer();
   var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
