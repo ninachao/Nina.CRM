@@ -294,16 +294,6 @@ ol.line .pt{position:absolute;left:-6px;top:5px;width:10px;height:10px;border-ra
 .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .tab.feewarn:not(.on){color:#C07A2E;border-color:#EEDFB4}
 
-/* board */
-.board{display:flex;gap:14px;overflow-x:auto;padding-bottom:12px}
-.bcol{min-width:230px;width:230px;flex:none;background:rgba(255,255,255,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:10px}
-.bcol.over{background:var(--violet-soft);border-color:var(--violet)}
-.bcol h4{font-size:14px;font-weight:700;margin:2px 4px 10px;display:flex;align-items:center;gap:6px}
-.bcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:9px;box-shadow:0 1px 2px rgba(90,80,60,.08);cursor:grab}
-.bcard:active{cursor:grabbing}
-.bcard .bc{font-size:11px;color:var(--muted);font-weight:700}
-.bcard .bs{font-size:13px;font-weight:600;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-
 /* notes */
 .notecard{background:rgba(255,255,255,.62);backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15);border:1px solid rgba(255,255,255,.75);border-radius:16px;padding:15px;box-shadow:0 2px 10px rgba(90,70,80,.06);break-inside:avoid}
 .notecard h3{margin:0 0 7px;font-size:16px;font-weight:700}
@@ -756,6 +746,15 @@ function softDelete(label,removeFn,restoreFn){removeFn();save();render();showToa
 function getC(id){return S.data.customers.filter(function(c){return c.id===id;})[0];}
 function factoryText(p){return ((p.factorySubjects&&p.factorySubjects.length)?p.factorySubjects.map(function(f){return f.subject||f;}):(p.factorySubject?[p.factorySubject]:[])).join("； ");}
 function TW(id){return S.data.todoWeeks.filter(function(w){return w.id===id;})[0];}
+function ensureWeek(){if(!S.data.todoWeeks.length){S.data.todoWeeks.unshift({id:uid(),label:thisWeekLabel(),items:[]});}return S.data.todoWeeks[0];}
+function addProjTodo(c,p){
+  var w=ensureWeek();var txt=(p.customerSubject||"").trim()||"（未命名事項）";
+  if(w.items.some(function(i){return i.cust===c.id&&i.text===txt;}))return {dup:true,w:w};
+  var steps=(p.factorySubjects||[]).filter(function(fs){return fs&&fs.subject;}).map(function(fs){return {id:uid(),text:fs.subject,done:false};});
+  if(!steps.length&&(p.nextAction||"").trim())steps.push({id:uid(),text:p.nextAction.trim(),done:false});
+  w.items.push({id:uid(),text:txt,done:false,star:false,sub:"",cust:c.id,projectId:p.id,steps:steps});
+  return {dup:false,w:w};
+}
 function TI(wid,tid){var w=TW(wid);return w?w.items.filter(function(i){return i.id===tid;})[0]:null;}
 function TS(wid,tid,sid){var it=TI(wid,tid);return it?(it.steps||[]).filter(function(s){return s.id===sid;})[0]:null;}
 function cloneTodo(i){return {id:uid(),text:i.text,done:false,star:!!i.star,sub:i.sub||"",cust:i.cust||null,steps:(i.steps||[]).map(function(s){return {id:uid(),text:s.text,done:!!s.done};})};}
@@ -804,7 +803,7 @@ function dashLists(){
 }
 
 /* ===================== 導覽列 ===================== */
-var NAV=[["dashboard","中控台"],["todos","待辦"],["customers","客戶"],["orders","訂單"],["parts","料號申請"],["quotes","報價單"],["board","看板"],["samples","寄樣"],["notes","小抄"]];
+var NAV=[["dashboard","中控台"],["todos","待辦"],["customers","客戶"],["orders","訂單"],["parts","料號申請"],["quotes","報價單"],["samples","寄樣"],["notes","小抄"]];
 var PART_STATUS=["申請中","已核發","取消"];
 var PART_STYLE={"申請中":"background:#FAF1DC;color:#8F681A","已核發":"background:#E6F4EB;color:#357B50","取消":"background:#F1F0EA;color:#7c7890"};
 function renderNav(){
@@ -831,7 +830,6 @@ function renderInner(){
   else if(v==="customers")h=renderCustomers();
   else if(v==="orders")h=renderOrders();
   else if(v==="detail")h=renderDetail();
-  else if(v==="board")h=renderBoard();
   else if(v==="samples")h=renderSamples();
   else if(v==="notes")h=renderNotes();
   else if(v==="vendors")h=renderVendors();
@@ -1053,7 +1051,7 @@ function projRow(p){
   h+='<span class="chev'+(open?" open":"")+'">'+icon("chev",16)+'</span>';
   h+='<div class="prowmain"><div class="prowtitle">'+esc(p.customerSubject||"（未命名）")+'</div><div class="prowflags">'+flags+'</div></div>';
   h+='<div class="prowmeta">'+metaTop+(metaBot?('<br>'+metaBot):"")+'</div>';
-  h+='<div class="prowicons"><button class="iconmini" data-action="edit-project" data-pid="'+p.id+'">'+icon("pencil",15)+'</button><button class="iconmini del" data-action="delete-project" data-pid="'+p.id+'">'+icon("trash",15)+'</button></div>';
+  h+='<div class="prowicons"><button class="iconmini" data-action="proj-to-todo" data-pid="'+p.id+'" title="把這個事項加到本週待辦">📝</button><button class="iconmini" data-action="edit-project" data-pid="'+p.id+'">'+icon("pencil",15)+'</button><button class="iconmini del" data-action="delete-project" data-pid="'+p.id+'">'+icon("trash",15)+'</button></div>';
   h+='</div>';
   if(open)h+=projBody(p,st);
   return h;
@@ -1175,20 +1173,6 @@ function sampleRow(p,s,withCust){
     '<button class="iconmini" data-action="edit-sample" data-pid="'+p.id+'" data-sid="'+s.id+'">'+icon("pencil",14)+'</button>'+
     '<button class="delx" data-action="del-sample" data-pid="'+p.id+'" data-sid="'+s.id+'">'+icon("x",13)+'</button></div></div>'+
     '<div class="kv">'+(s.shipDate?'<span>寄出 '+esc(s.shipDate)+'</span>':"")+(s.courier||s.tracking?'<span>'+esc(s.courier)+' '+esc(s.tracking)+'</span>':"")+'<span>'+fee+'</span>'+(s.feedback?'<span>回饋：'+esc(s.feedback)+'</span>':"")+'</div></div>';
-}
-
-/* ---------- 看板 ---------- */
-function renderBoard(){
-  var h='<h2 class="sectitle">看板 <span class="count">拖拉換階段</span></h2><p class="subt">把卡片拖到別的欄就改狀態。hold 中 / 已結案的不顯示在這。</p>';
-  h+='<div class="board" style="margin-top:14px">';
-  STAGE_KEYS.forEach(function(s){
-    var items=[];allProjects().forEach(function(x){if(!x.p.archived&&!x.p.hold&&x.p.stage===s)items.push(x);});
-    var st=STAGES[s];
-    h+='<div class="bcol" data-stage="'+s+'"><h4><span style="width:9px;height:9px;border-radius:99px;background:'+st.dot+';display:inline-block"></span>'+s+' <span class="count">'+items.length+'</span></h4>';
-    h+=items.map(function(x){return '<div class="bcard" draggable="true" data-pid="'+x.p.id+'" data-cid="'+x.c.id+'" data-action="open" data-id="'+x.c.id+'"><div class="bc">'+esc(x.c.name)+(x.p.isComplaint?' · 客訴':"")+'</div><div class="bs">'+esc(x.p.customerSubject||"（未命名）")+'</div></div>';}).join("");
-    h+='</div>';
-  });
-  h+='</div>';return h;
 }
 
 /* ---------- 寄樣總覽 ---------- */
@@ -1851,7 +1835,8 @@ function projectModal(d){
     fld("料號 / BOM（用逗號分隔，可搜尋）",'<input class="inp" id="p_pn" value="'+esc(d.partNumbers)+'" placeholder="S6GL000006, 4PT9900021">')+
     '<div class="two">'+fld("狀態",stageSel)+fld("下次跟進日",'<input class="inp" type="date" id="p_fu" value="'+esc(d.followUpDate)+'">')+'</div>'+
     '<div class="two">'+fld("交期（下單後）",'<input class="inp" type="date" id="p_dd" value="'+esc(d.deliveryDate)+'">')+fld("是否客訴",'<select class="inp" id="p_cp"><option value="">一般</option><option value="1"'+(d.isComplaint?" selected":"")+'>客訴</option></select>')+'</div>'+
-    fld("下一步（選填）",'<input class="inp" id="p_na" value="'+esc(d.nextAction)+'" placeholder="例如：6/25 前報價">');
+    fld("下一步（選填）",'<input class="inp" id="p_na" value="'+esc(d.nextAction)+'" placeholder="例如：6/25 前報價">')+
+    (d.id?"":'<label class="repeat" style="cursor:pointer;margin-top:4px"><input type="checkbox" id="p_totodo" checked style="width:16px;height:16px;flex:none"><span class="grow">同時加到本週待辦（工廠主旨會變成可打勾的步驟）</span></label>');
   return shell(d.id?"編輯事項":"新增事項",body);
 }
 function updateModal(d){
@@ -2038,6 +2023,7 @@ document.addEventListener("click",function(e){
 
   if(a==="add-project"){S.modal={type:"project",customerId:S.selectedId,draft:{}};renderModal();return;}
   if(a==="edit-project"){S.modal={type:"project",customerId:S.selectedId,draft:JSON.parse(JSON.stringify(P()))};renderModal();return;}
+  if(a==="proj-to-todo"){var ptc=C(),ptp=P();if(!ptp)return;var pres=addProjTodo(ptc,ptp);save();render();showToast(pres.dup?"這個事項已經在待辦裡了":("已加到「"+pres.w.label+"」待辦，可到待辦頁打勾／補步驟"),null);return;}
   if(a==="delete-project"){var c=C(),item=P(),idx=c.projects.indexOf(item);softDelete('已刪除事項「'+(item.customerSubject||"")+'」',function(){c.projects.splice(idx,1);},function(){c.projects.splice(Math.min(idx,c.projects.length),0,item);});return;}
 
   if(a==="quick"){var p=P();var qf=S.tlFilter[pid];var qth=(qf&&p.factorySubjects.some(function(t){return t.id===qf;}))?qf:((p.factorySubjects[0]||{}).id||"");p.updates.push({id:uid(),date:todayISO(),note:t.getAttribute("data-note"),emails:[],thread:qth});var ns=t.getAttribute("data-stage");if(ns){if(p.factorySubjects.length){var qt=p.factorySubjects.filter(function(t2){return t2.id===qth;})[0];if(qt)qt.stage=ns;p.stage=rollupStage(p);}else p.stage=ns;}touch(p);save();render();return;}
@@ -2290,7 +2276,8 @@ function capturePending(m){
 function saveModal(){
   var m=S.modal;if(!m)return;readModal();capturePending(m);var d=m.draft;
   if(m.type==="customer"){if(!(d.name||"").trim()){alert("請輸入客戶名稱。");return;}if(d.status==="__custom__"||!(d.status||"").trim())d.status="潛在客戶";if(S.data.statuses.indexOf(d.status)<0)S.data.statuses.push(d.status);var L=S.data.customers,i=-1;if(d.id)L.forEach(function(x,k){if(x.id===d.id)i=k;});if(i>=0)L[i]=Object.assign(L[i],d);else L.unshift(Object.assign({id:uid(),projects:[],createdAt:todayISO()},d));}
-  else if(m.type==="project"){if(!(d.customerSubject||"").trim()){alert("請輸入客人主旨。");return;}if(!Array.isArray(d.factorySubjects))d.factorySubjects=[];d.factorySubjects.forEach(function(t){if(!t.stage)t.stage=d.stage||"待我處理";});var c=getC(m.customerId),j=-1;c.projects.forEach(function(x,k){if(x.id===d.id)j=k;});var tgt;if(j>=0){c.projects[j]=Object.assign(c.projects[j],d);tgt=c.projects[j];}else{tgt=Object.assign({id:uid(),updates:[],quotes:[],samples:[],factorySubjects:[],hold:null,archived:false,stage:d.stage||"待我處理"},d);c.projects.unshift(tgt);}if(tgt.factorySubjects.length)tgt.stage=rollupStage(tgt);}
+  else if(m.type==="project"){if(!(d.customerSubject||"").trim()){alert("請輸入客人主旨。");return;}if(!Array.isArray(d.factorySubjects))d.factorySubjects=[];d.factorySubjects.forEach(function(t){if(!t.stage)t.stage=d.stage||"待我處理";});var c=getC(m.customerId),j=-1;c.projects.forEach(function(x,k){if(x.id===d.id)j=k;});var tgt,isNew=!(j>=0);if(j>=0){c.projects[j]=Object.assign(c.projects[j],d);tgt=c.projects[j];}else{tgt=Object.assign({id:uid(),updates:[],quotes:[],samples:[],factorySubjects:[],hold:null,archived:false,stage:d.stage||"待我處理"},d);c.projects.unshift(tgt);}if(tgt.factorySubjects.length)tgt.stage=rollupStage(tgt);
+    if(isNew){var totodo=document.getElementById("p_totodo");if(totodo&&totodo.checked){var pr=addProjTodo(c,tgt);m._todoLabel=pr.dup?null:pr.w.label;}}}
   else if(m.type==="update"){if(!(d.note||"").trim()){alert("請輸入備註。");return;}var pu=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];pu.updates.push({id:uid(),date:d.date||todayISO(),note:d.note,emails:d.emails||[],thread:d.thread||""});touch(pu);}
   else if(m.type==="quote"){var pq=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];if(d.id){var qk=-1;pq.quotes.forEach(function(q,ix){if(q.id===d.id)qk=ix;});if(qk>=0)pq.quotes[qk]=Object.assign(pq.quotes[qk],{product:d.product,currency:d.currency,tiers:d.tiers||[],quoteDate:d.quoteDate,validUntil:d.validUntil,note:d.note});}else pq.quotes.push({id:uid(),product:d.product,currency:d.currency,tiers:d.tiers||[],quoteDate:d.quoteDate,validUntil:d.validUntil,note:d.note,createdAt:todayISO()});}
   else if(m.type==="sample"){var psm=getC(m.customerId).projects.filter(function(x){return x.id===m.projectId;})[0];if(d.id){var k=-1;psm.samples.forEach(function(s,ix){if(s.id===d.id)k=ix;});if(k>=0)psm.samples[k]=Object.assign(psm.samples[k],d);}else psm.samples.push(Object.assign({id:uid(),createdAt:todayISO()},d));}
@@ -2301,7 +2288,9 @@ function saveModal(){
   else if(m.type==="qcompany"){S.data.quoteCompany={zh:rv("qc_zh"),en:rv("qc_en"),addr:rv("qc_addr"),tel:rv("qc_tel")};}
   else if(m.type==="cats"){if(m.backTo){S.modal=m.backTo;save();renderModal();render();return;}S.modal=null;save();render();return;}
   else if(m.type==="sop"){var sv2=document.getElementById("sopt_new");if(sv2&&sv2.value.trim())S.data.settings.orderSop.push(sv2.value.trim());S.modal=null;save();renderModal();render();return;}
+  var _tl=m._todoLabel;
   S.modal=null;save();renderModal();render();
+  if(_tl)showToast("已加到「"+_tl+"」待辦",null);
 }
 
 /* hold 自訂日期：select 後關閉 picker，等按確定。改為按鈕直接套用 */
@@ -2368,7 +2357,7 @@ document.addEventListener("paste",function(e){
 });
 document.addEventListener("pointerdown",function(e){var q=e.target&&e.target.closest?e.target.closest(".qitem[data-iid]"):null;if(q)S._lastQItem=q.getAttribute("data-iid");},true);
 
-/* 拖拉：看板換階段 + 客戶卡片排序 */
+/* 拖拉：客戶卡片排序 */
 function reorderCust(dragId,targetId){
   if(!dragId||dragId===targetId)return;
   var arr=S.data.customers,from=-1,i;
@@ -2379,20 +2368,15 @@ function reorderCust(dragId,targetId){
   save();render();
 }
 document.addEventListener("dragstart",function(e){
-  var b=e.target.closest(".bcard");if(b){S.dragP=b.getAttribute("data-pid");S.dragC=b.getAttribute("data-cid");S.dragCust=null;e.dataTransfer.effectAllowed="move";return;}
-  var pc=e.target.closest(".pcard[data-cid]");if(pc){S.dragCust=pc.getAttribute("data-cid");S.dragP=null;e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",S.dragCust);}catch(x){}}
+  var pc=e.target.closest(".pcard[data-cid]");if(pc){S.dragCust=pc.getAttribute("data-cid");e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",S.dragCust);}catch(x){}}
 });
 document.addEventListener("dragover",function(e){
-  var col=e.target.closest(".bcol");if(col&&S.dragP){e.preventDefault();col.classList.add("over");return;}
   var pc=e.target.closest(".pcard[data-cid]");if(pc&&S.dragCust){e.preventDefault();pc.classList.add("dropmark");}
 });
 document.addEventListener("dragleave",function(e){
-  var col=e.target.closest(".bcol");if(col)col.classList.remove("over");
   var pc=e.target.closest(".pcard[data-cid]");if(pc)pc.classList.remove("dropmark");
 });
 document.addEventListener("drop",function(e){
-  var col=e.target.closest(".bcol");
-  if(col&&S.dragP){e.preventDefault();col.classList.remove("over");var st=col.getAttribute("data-stage");var c=getC(S.dragC);if(c){var p=c.projects.filter(function(x){return x.id===S.dragP;})[0];if(p&&p.stage!==st){p.stage=st;p.updates.push({id:uid(),date:todayISO(),note:"（看板）狀態改為 "+st,emails:[]});save();render();}}S.dragP=null;S.dragC=null;return;}
   var pc=e.target.closest(".pcard[data-cid]");
   if(pc&&S.dragCust){e.preventDefault();pc.classList.remove("dropmark");reorderCust(S.dragCust,pc.getAttribute("data-cid"));S.dragCust=null;}
 });
