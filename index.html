@@ -471,10 +471,12 @@ body.colresizing .oin{pointer-events:none}
 .qmeta{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
 .qmeta td{padding:2px 0;width:33%}
 .qtable{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
-.qtable th,.qtable td{border:1px solid #000;padding:9px 10px;vertical-align:middle;line-height:1.7;overflow:hidden;word-break:break-word}
-.qtable th{text-align:center;font-size:13px;padding:8px 6px;position:relative}
-.qcolgrip{position:absolute;top:0;right:-4px;width:10px;height:100%;cursor:col-resize;z-index:4}
-.qcolgrip:hover,.qcolgrip.drag{background:linear-gradient(90deg,transparent 35%,var(--violet) 35%,var(--violet) 65%,transparent 65%)}
+.qtable th,.qtable td{border:1px solid #000;padding:9px 10px;vertical-align:middle;line-height:1.7;word-break:break-word}
+.qtable td{overflow:hidden}
+.qtable th{text-align:center;font-size:13px;padding:8px 6px;position:relative;overflow:visible}
+.qcolgrip{position:absolute;top:0;right:-9px;width:18px;height:100%;cursor:col-resize;z-index:6;display:flex;align-items:center;justify-content:center}
+.qcolgrip::after{content:"";width:3px;height:60%;background:#b9b1d8;border-radius:3px;transition:background .15s,height .15s}
+.qcolgrip:hover::after,.qcolgrip.drag::after{background:var(--violet);height:100%}
 @media print{.qcolgrip{display:none!important}}
 .qtable td{text-align:center}
 .qtable .qdesc{text-align:left}
