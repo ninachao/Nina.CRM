@@ -470,9 +470,12 @@ body.colresizing .oin{pointer-events:none}
 .qtitle{text-align:center;font-weight:700;font-size:19px;letter-spacing:1px;margin-bottom:10px}
 .qmeta{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
 .qmeta td{padding:2px 0;width:33%}
-.qtable{width:100%;border-collapse:collapse;font-size:12.5px}
-.qtable th,.qtable td{border:1px solid #000;padding:9px 10px;vertical-align:middle;line-height:1.7}
-.qtable th{text-align:center;font-size:13px;padding:8px 6px}
+.qtable{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+.qtable th,.qtable td{border:1px solid #000;padding:9px 10px;vertical-align:middle;line-height:1.7;overflow:hidden;word-break:break-word}
+.qtable th{text-align:center;font-size:13px;padding:8px 6px;position:relative}
+.qcolgrip{position:absolute;top:0;right:-4px;width:10px;height:100%;cursor:col-resize;z-index:4}
+.qcolgrip:hover,.qcolgrip.drag{background:linear-gradient(90deg,transparent 35%,var(--violet) 35%,var(--violet) 65%,transparent 65%)}
+@media print{.qcolgrip{display:none!important}}
 .qtable td{text-align:center}
 .qtable .qdesc{text-align:left}
 .qtable .qprice{font-size:13px;white-space:nowrap}
@@ -669,6 +672,7 @@ function normalize(d){
   if(!Array.isArray(d.settings.orderSop)||!d.settings.orderSop.length)d.settings.orderSop=["寄 PI 給客人","發信通知工廠下單","提供嘜頭給工廠"];
   d.settings.orderColW=Object.assign({pn:19,qty:11,price:11,amt:10,desc:26,remark:23},d.settings.orderColW||{});
   if(!Array.isArray(d.settings.orderStatuses)||!d.settings.orderStatuses.length)d.settings.orderStatuses=DEFAULT_ORDER_STATUS.slice();
+  d.settings.quoteColW=Object.assign({pic:21,itemNo:12,desc:30,moq:7,price:10,remark:20},d.settings.quoteColW||{});
   if(!Array.isArray(d.statuses))d.statuses=DEFAULT_STATUSES.slice();
   if(!d.exchange)d.exchange={text:"",updatedAt:""};
   if(!Array.isArray(d.categories))d.categories=DEFAULT_CATS.slice();
@@ -1580,7 +1584,13 @@ function quoteSheetHTML(doc){
   h+='<table class="qmeta"><tr><td><b>TO: '+esc(doc.to)+'</b></td><td><b>ATTENTION: '+esc(doc.attention)+'</b></td><td><b>DATE: '+esc(doc.date)+'</b></td></tr>'+
      '<tr><td><b>TEL: '+esc(doc.tel)+'</b></td><td><b>INCOTERM: '+esc(doc.incoterm)+'</b></td><td><b>CURRENCY: '+esc(doc.currency)+'</b></td></tr></table>';
   var M=!!doc.showMOQ;
-  h+='<table class="qtable"><thead><tr><th style="width:'+(M?'21':'23')+'%">Picture</th><th style="width:12%">Item No</th><th style="width:'+(M?'30':'35')+'%">Description</th>'+(M?'<th style="width:7%">MOQ</th>':'')+'<th style="width:10%">Price/Pcs<br>for '+esc(doc.qtyLabel)+'</th><th style="width:'+(M?'20':'20')+'%">Remark</th></tr></thead><tbody>';
+  var cw=S.data.settings.quoteColW;
+  var qkeys=M?['pic','itemNo','desc','moq','price','remark']:['pic','itemNo','desc','price','remark'];
+  var qlabels={pic:'Picture',itemNo:'Item No',desc:'Description',moq:'MOQ',price:'Price/Pcs<br>for '+esc(doc.qtyLabel),remark:'Remark'};
+  function qwOf(k){return (k==='desc'&&!M)?(cw.desc+cw.moq):cw[k];}
+  var cg='<colgroup>'+qkeys.map(function(k){return '<col data-qcol="'+k+'" style="width:'+qwOf(k)+'%">';}).join("")+'</colgroup>';
+  var thead='<thead><tr>'+qkeys.map(function(k,i){return '<th>'+qlabels[k]+(i<qkeys.length-1?'<span class="qcolgrip" data-qcolgrip="'+k+'"></span>':'')+'</th>';}).join("")+'</tr></thead>';
+  h+='<table class="qtable">'+cg+thead+'<tbody>';
   doc.items.forEach(function(it){
     h+='<tr><td class="qpic">'+(it.img?'<img src="'+it.img+'">':"")+'</td><td>'+esc(it.itemNo)+'</td><td class="qdesc">'+esc(it.desc).replace(/\n/g,"<br>")+'</td>'+(M?'<td class="qprice">'+esc(it.moq)+'</td>':'')+'<td class="qprice">'+esc(it.price)+'</td><td class="qdesc">'+esc(it.remark).replace(/\n/g,"<br>")+'</td></tr>';
   });
@@ -2050,6 +2060,38 @@ document.addEventListener("drop",function(e){var it=e.target.closest&&e.target.c
   });
 })();
 
+/* 報價單預覽表格欄寬：拖標題分隔線調整（記住寬度） */
+(function(){
+  var MINW=5;var drag=null;
+  document.addEventListener("mousedown",function(e){
+    var g=e.target.closest&&e.target.closest(".qcolgrip");if(!g)return;
+    e.preventDefault();
+    var doc=QD(S.quoteId);if(!doc)return;var M=!!doc.showMOQ;
+    var keys=M?["pic","itemNo","desc","moq","price","remark"]:["pic","itemNo","desc","price","remark"];
+    var key=g.getAttribute("data-qcolgrip");var idx=keys.indexOf(key);var nextKey=keys[idx+1];if(!nextKey)return;
+    var table=g.closest("table");var W=table?table.getBoundingClientRect().width:600;
+    var cw=S.data.settings.quoteColW;
+    function disp(k){return (k==="desc"&&!M)?(cw.desc+cw.moq):cw[k];}
+    drag={key:key,nextKey:nextKey,M:M,startX:e.clientX,W:W,left0:disp(key),right0:disp(nextKey)};
+    g.classList.add("drag");document.body.classList.add("colresizing");
+  });
+  document.addEventListener("mousemove",function(e){
+    if(!drag)return;
+    var dPct=(e.clientX-drag.startX)/drag.W*100;
+    var nl=drag.left0+dPct,nr=drag.right0-dPct;
+    if(nl<MINW){nr-=(MINW-nl);nl=MINW;}if(nr<MINW){nl-=(MINW-nr);nr=MINW;}
+    var cw=S.data.settings.quoteColW;
+    function setKey(k,v){if(k==="desc"&&!drag.M){cw.desc=Math.max(1,v-cw.moq);}else{cw[k]=v;}}
+    setKey(drag.key,nl);setKey(drag.nextKey,nr);
+    var c1=document.querySelectorAll('.qtable col[data-qcol="'+drag.key+'"]');for(var i=0;i<c1.length;i++)c1[i].style.width=nl+"%";
+    var c2=document.querySelectorAll('.qtable col[data-qcol="'+drag.nextKey+'"]');for(var j=0;j<c2.length;j++)c2[j].style.width=nr+"%";
+  });
+  document.addEventListener("mouseup",function(){
+    if(!drag)return;var gg=document.querySelector(".qcolgrip.drag");if(gg)gg.classList.remove("drag");
+    document.body.classList.remove("colresizing");drag=null;save();
+  });
+})();
+
 document.addEventListener("change",function(e){
   var t=e.target.closest("[data-action='set-status']");
   if(t){var pid=t.getAttribute("data-pid");var c=getC(S.selectedId);var p=c.projects.filter(function(x){return x.id===pid;})[0];var v=t.value;
@@ -2186,15 +2228,24 @@ function setQuoteItemImg(iid,f){
 }
 document.addEventListener("paste",function(e){
   if(S.view!=="quotes"||!S.quoteId||!e.clipboardData)return;
+  // 在文字欄位（成本、單價、說明…）貼上 → 一律當純文字，不要當成貼圖片
+  var tg=e.target;
+  if(tg&&(tg.tagName==="INPUT"||tg.tagName==="TEXTAREA"||tg.isContentEditable))return;
+  // 剪貼簿同時有文字時（例如從 Excel 複製）也優先當文字，避免誤蓋圖片
+  var types=e.clipboardData.types||[];
+  var hasText=(types.indexOf?types.indexOf("text/plain")>=0:false)&&(e.clipboardData.getData("text/plain")||"").trim()!=="";
+  if(hasText)return;
   var items=e.clipboardData.items||[];var f=null;
   for(var i=0;i<items.length;i++){if(items[i].type&&items[i].type.indexOf("image")===0){f=items[i].getAsFile();break;}}
   if(!f)return;
   var host=e.target&&e.target.closest?e.target.closest(".qitem[data-iid]"):null;
   var doc=QD(S.quoteId);if(!doc)return;
-  var iid=host?host.getAttribute("data-iid"):(doc.items.length===1?doc.items[0].id:null);
-  if(!iid){showToast("要貼到哪個品項？先點該品項任一欄位再 Ctrl+V",null);return;}
+  var lastOk=S._lastQItem&&doc.items.some(function(it){return it.id===S._lastQItem;});
+  var iid=host?host.getAttribute("data-iid"):(lastOk?S._lastQItem:(doc.items.length===1?doc.items[0].id:null));
+  if(!iid){showToast("要貼到哪個品項？先點一下該品項（例如圖片框）再 Ctrl+V",null);return;}
   e.preventDefault();setQuoteItemImg(iid,f);
 });
+document.addEventListener("pointerdown",function(e){var q=e.target&&e.target.closest?e.target.closest(".qitem[data-iid]"):null;if(q)S._lastQItem=q.getAttribute("data-iid");},true);
 
 /* 拖拉：看板換階段 + 客戶卡片排序 */
 function reorderCust(dragId,targetId){
