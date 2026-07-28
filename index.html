@@ -402,8 +402,12 @@ body.colresizing .oin{pointer-events:none}
 .qrow:hover{box-shadow:0 8px 22px rgba(90,70,80,.11);transform:translateY(-1px)}
 .qdate{flex:none;width:86px;font-weight:700;font-size:12.5px;color:#8a8598;font-variant-numeric:tabular-nums}
 .qmid{flex:1;min-width:0}
-.qsum{font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.qsum .qcount{color:var(--muted);font-size:12.5px;font-weight:600}
+.qsum{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qsum .qcount{color:var(--muted);font-size:12px;font-weight:600}
+.qtitle-inp{width:100%;font-size:14.5px;font-weight:700;color:var(--ink);font-family:inherit;border:1px solid transparent;background:transparent;border-radius:8px;padding:3px 7px;margin:-3px 0 1px -7px;transition:border-color .15s,background .15s}
+.qtitle-inp::placeholder{color:#b8b3c4;font-weight:500}
+.qtitle-inp:hover{border-color:var(--line);background:rgba(255,255,255,.6)}
+.qtitle-inp:focus{outline:none;border-color:var(--violet);background:#fff;box-shadow:0 0 0 3px var(--violet-soft)}
 .qsub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qright{flex:none;display:flex;align-items:center;gap:8px}
 .qcur{font-size:12px;color:#8a8598;font-weight:600}
@@ -680,7 +684,7 @@ function normalize(d){
     it.steps.forEach(function(s){if(!s.id)s.id=uid();if(s.done==null)s.done=false;if(s.text==null)s.text="";});
   });});
   if(!Array.isArray(d.quoteDocs))d.quoteDocs=[];
-  d.quoteDocs.forEach(function(q){if(typeof q.projectId==="undefined")q.projectId="";if(!q.channel)q.channel="Email";
+  d.quoteDocs.forEach(function(q){if(typeof q.projectId==="undefined")q.projectId="";if(!q.channel)q.channel="Email";if(typeof q.title==="undefined")q.title="";
     if(typeof q.showMOQ==="undefined")q.showMOQ="";
     (q.items||[]).forEach(function(it){if(typeof it.moq==="undefined")it.moq="";if(!Array.isArray(it.addons)){it.addons=[];var pk=parseFloat(it.pack);if(!isNaN(pk)&&pk!==0)it.addons.push({id:uid(),label:"包裝",amt:String(it.pack)});delete it.pack;}});});
   if(!d.quoteCompany)d.quoteCompany={
@@ -1456,7 +1460,7 @@ function todoPanel(w){
 
 /* ---------- 報價單 ---------- */
 function QD(id){return S.data.quoteDocs.filter(function(q){return q.id===id;})[0];}
-function newQuoteDoc(c){var ct=c?((c.contacts||[])[0]||{}):{};return {id:uid(),to:c?c.name:"",attention:ct.name||"",tel:ct.phone||"",incoterm:"EXWORK",currency:"USD",date:todayISO().replace(/-/g,"."),qtyLabel:"1K",showMOQ:"",customerId:c?c.id:"",projectId:"",channel:"Email",items:[newQuoteItem()],remarks:"1. Lead time: 30-45 days (to be confirmed)\n2. Validity of quotation: within 30 days to change\n3. Prices subject to change without notice.",createdAt:todayISO()};}
+function newQuoteDoc(c){var ct=c?((c.contacts||[])[0]||{}):{};return {id:uid(),title:"",to:c?c.name:"",attention:ct.name||"",tel:ct.phone||"",incoterm:"EXWORK",currency:"USD",date:todayISO().replace(/-/g,"."),qtyLabel:"1K",showMOQ:"",customerId:c?c.id:"",projectId:"",channel:"Email",items:[newQuoteItem()],remarks:"1. Lead time: 30-45 days (to be confirmed)\n2. Validity of quotation: within 30 days to change\n3. Prices subject to change without notice.",createdAt:todayISO()};}
 function newQuoteItem(){return {id:uid(),img:"",itemNo:"",desc:"",price:"",remark:"",moq:"",cost:"",rate:"6.75",factor:"0.7",addons:[]};}
 function renderQuotes(){
   if(S.quoteId){var doc=QD(S.quoteId);if(doc)return quoteEditor(doc);S.quoteId=null;}
@@ -1486,7 +1490,7 @@ function renderQuotes(){
       var proj=(c2&&q.projectId)?(c2.projects||[]).filter(function(p){return p.id===q.projectId;})[0]:null;
       return '<div class="qrow" data-action="open-quote" data-qdid="'+q.id+'">'+
         '<span class="qdate">'+esc(q.date||"—")+'</span>'+
-        '<div class="qmid"><div class="qsum">'+sum+'</div>'+(proj?'<div class="qsub">📎 '+esc(proj.customerSubject)+'</div>':"")+'</div>'+
+        '<div class="qmid"><input class="qtitle-inp" data-qtitle="'+q.id+'" value="'+esc(q.title)+'" placeholder="自己命名這張報價（例如：三合一 526款 微信報價）"><div class="qsub"><span class="qsum">'+sum+'</span>'+(proj?' 📎 '+esc(proj.customerSubject):'')+'</div></div>'+
         '<div class="qright"><span class="qcur">'+esc(q.currency||"")+'</span>'+chip+
         '<button class="iconmini" data-action="dup-quote" data-qdid="'+q.id+'" title="複製一份">'+icon("box",15)+'</button>'+
         '<button class="iconmini del" data-action="del-quote-doc" data-qdid="'+q.id+'" title="刪除">'+icon("trash",15)+'</button></div>'+
@@ -1505,6 +1509,7 @@ function quoteEditor(doc){
   var projOpts='<option value="">—（選填）—</option>';
   if(doc.customerId){var pc=getC(doc.customerId);if(pc)projOpts+=(pc.projects||[]).map(function(p){return '<option value="'+p.id+'"'+(doc.projectId===p.id?" selected":"")+'>'+esc(p.customerSubject||"（未命名）")+'</option>';}).join("");}
   h+='<div class="qform">';
+  h+=fld("報價單名稱（只給你自己辨識，不會印在報價單上）",'<input class="inp" data-qf="title" value="'+esc(doc.title||"")+'" placeholder="例如：三合一 526款 微信報價">');
   h+='<div class="qsechead">收件人</div>';
   h+='<div class="two">'+
      fld("客戶（選了自動帶入 TO / ATTENTION / TEL）",'<select class="inp" data-qf="custpick">'+custOpts+'</select>')+
@@ -1976,9 +1981,9 @@ document.addEventListener("click",function(e){
   if(a==="ofilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="new-quote"){var nq=newQuoteDoc();S.data.quoteDocs.unshift(nq);S.quoteId=nq.id;save();render();return;}
   if(a==="new-quote-for"){var nqc=getC(t.getAttribute("data-cid"));var nq2=newQuoteDoc(nqc);S.data.quoteDocs.unshift(nq2);S.quoteId=nq2.id;S.view="quotes";save();render();window.scrollTo(0,0);return;}
-  if(a==="open-quote"){if(e.target.closest("[data-action='dup-quote'],[data-action='del-quote-doc']"))return;S.quoteId=t.getAttribute("data-qdid");S.view="quotes";render();window.scrollTo(0,0);return;}
+  if(a==="open-quote"){if(e.target.closest("[data-action='dup-quote'],[data-action='del-quote-doc'],[data-qtitle]"))return;S.quoteId=t.getAttribute("data-qdid");S.view="quotes";render();window.scrollTo(0,0);return;}
   if(a==="back-quotes"){S.quoteId=null;render();return;}
-  if(a==="dup-quote"){var od=QD(t.getAttribute("data-qdid"));var cp=JSON.parse(JSON.stringify(od));cp.id=uid();cp.date=todayISO().replace(/-/g,".");cp.items.forEach(function(it){it.id=uid();});S.data.quoteDocs.unshift(cp);S.quoteId=cp.id;save();render();return;}
+  if(a==="dup-quote"){var od=QD(t.getAttribute("data-qdid"));var cp=JSON.parse(JSON.stringify(od));cp.id=uid();cp.date=todayISO().replace(/-/g,".");if(cp.title)cp.title=cp.title+"（複製）";cp.items.forEach(function(it){it.id=uid();});S.data.quoteDocs.unshift(cp);S.quoteId=cp.id;save();render();return;}
   if(a==="del-quote-doc"){var qarr=S.data.quoteDocs,qd2=QD(t.getAttribute("data-qdid")),qi2=qarr.indexOf(qd2);softDelete('已刪除報價單「'+(qd2.to||"未命名")+'」',function(){qarr.splice(qi2,1);if(S.quoteId===qd2.id)S.quoteId=null;},function(){qarr.splice(Math.min(qi2,qarr.length),0,qd2);});return;}
   if(a==="add-qitem"){var dq=QD(S.quoteId);dq.items.push(newQuoteItem());save();render();return;}
   if(a==="qitem-del"){var dq2=QD(S.quoteId);var qit=dq2.items.filter(function(x){return x.id===t.getAttribute("data-iid");})[0];var qix=dq2.items.indexOf(qit);softDelete("已刪除品項",function(){dq2.items.splice(qix,1);},function(){dq2.items.splice(Math.min(qix,dq2.items.length),0,qit);});return;}
@@ -2302,6 +2307,8 @@ document.addEventListener("input",function(e){
   if(oifld){var oio=orderByEl(oifld);if(oio){var oit=(oio.items||[]).filter(function(x){return x.id===oifld.getAttribute("data-iid");})[0];if(oit){oit[oifld.getAttribute("data-oif")]=oifld.value;oio.pn=orderPNs(oio);save();updateOrderAmtDom(oio);}}return;}
   var pfld=e.target.closest("[data-pf]");
   if(pfld){var ppo=partByEl(pfld);if(ppo){ppo[pfld.getAttribute("data-pf")]=pfld.value;save();}return;}
+  var qt=e.target.closest("[data-qtitle]");
+  if(qt){var qtd=QD(qt.getAttribute("data-qtitle"));if(qtd){qtd.title=qt.value;save();}return;}
   var qf=e.target.closest("[data-qf]");
   if(qf&&S.quoteId){var doc=QD(S.quoteId);if(!doc)return;var f=qf.getAttribute("data-qf");
     if(f!=="custpick"){doc[f]=qf.value;save();refreshQuoteSheet();}return;}
