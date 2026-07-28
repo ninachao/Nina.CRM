@@ -1506,6 +1506,80 @@ function parseQuoteImport(text){
   }
   return {header:header,items:items};
 }
+function loadPdfJS(){return new Promise(function(res,rej){
+  if(window.pdfjsLib)return res(window.pdfjsLib);
+  var s=document.createElement("script");s.src="pdf.min.js";
+  s.onload=function(){if(window.pdfjsLib){try{window.pdfjsLib.GlobalWorkerOptions.workerSrc="pdf.worker.min.js";}catch(e){}res(window.pdfjsLib);}else rej(new Error("no-pdfjs"));};
+  s.onerror=function(){rej(new Error("pdf-load-fail"));};
+  document.head.appendChild(s);
+});}
+function isBlankCanvas(c){var ctx=c.getContext("2d");var d;try{d=ctx.getImageData(0,0,c.width,c.height).data;}catch(e){return false;}
+  var nonwhite=0,total=0,step=Math.max(4,Math.floor(d.length/8000)*4);
+  for(var i=0;i<d.length;i+=step){total++;if(d[i]<244||d[i+1]<244||d[i+2]<244)nonwhite++;}
+  return total?(nonwhite/total)<0.02:true;}
+async function parsePdfQuote(buf){
+  var pdfjsLib=await loadPdfJS();
+  var pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  var allItems=[],headerText=[];
+  for(var pn=1;pn<=pdf.numPages;pn++){
+    var page=await pdf.getPage(pn);var vp=page.getViewport({scale:1});var H=vp.height,Wd=vp.width;
+    var tc=await page.getTextContent();
+    var runs=tc.items.filter(function(it){return it.str&&it.str.trim();}).map(function(it){var tr=it.transform;return {x:tr[4],cx:tr[4]+(it.width||0)/2,top:H-tr[5],str:it.str};});
+    if(!runs.length)continue;
+    // 抬頭文字（每頁重建成行給 parseQuoteImport 抓 TO/DATE… ）
+    var lm={};runs.forEach(function(r){var k=Math.round(r.top);(lm[k]=lm[k]||[]).push(r);});
+    Object.keys(lm).sort(function(a,b){return a-b;}).forEach(function(k){headerText.push(lm[k].sort(function(a,b){return a.x-b.x;}).map(function(r){return r.str;}).join(" "));});
+    // 找表頭欄位中心
+    function lbl(re){return runs.filter(function(x){return re.test(x.str.trim());})[0];}
+    var lCode=lbl(/^Item$/i)||lbl(/^Item\s*Code$/i)||lbl(/^Code$/i);
+    var lPic=lbl(/^Picture$/i),lDesc=lbl(/^Description$/i),lPrice=lbl(/^Price/i),lRem=lbl(/^Remark$/i);
+    if(!lDesc||!lRem){continue;} // 這頁沒有品項表
+    var centers=[lCode,lPic,lDesc,lPrice,lRem].map(function(l){return l?l.cx:null;});
+    var fb=[0.05,0.13,0.32,0.71,0.83].map(function(r){return r*Wd;});
+    for(var i=0;i<5;i++)if(centers[i]==null)centers[i]=fb[i];
+    var bnds=[0];for(var i=0;i<4;i++)bnds.push((centers[i]+centers[i+1])/2);bnds.push(Wd);
+    function colOf(x){for(var i=0;i<5;i++){if(x>=bnds[i]&&x<bnds[i+1])return i;}return 4;}
+    var headTop=Math.max.apply(null,[lPic,lDesc,lRem,lPrice].filter(Boolean).map(function(l){return l.top;}));
+    var footer=runs.filter(function(x){return /^REMARK\b/i.test(x.str.trim())&&colOf(x.cx)===0&&x.top>headTop+18;})[0];
+    var bodyTop=headTop+9,bodyBot=footer?footer.top-2:H;
+    var body=runs.filter(function(x){return x.top>bodyTop&&x.top<bodyBot;});
+    if(!body.length)continue;
+    var descRuns=body.filter(function(x){return colOf(x.cx)===2;}).sort(function(a,b){return a.top-b.top;});
+    var starts=[],lastTop=null;descRuns.forEach(function(x){if(lastTop==null||x.top-lastTop>20)starts.push(x.top);lastTop=x.top;});
+    if(!starts.length)continue;
+    var ranges=starts.map(function(s,i){return {top:s-6,bot:(i+1<starts.length?starts[i+1]-6:bodyBot)};});
+    function colText(inBand,ci,nl){var rs=inBand.filter(function(x){return colOf(x.cx)===ci;}).sort(function(a,b){return (a.top-b.top)||(a.x-b.x);});
+      var out=[],curTop=null,line=[];rs.forEach(function(r){if(curTop==null||Math.abs(r.top-curTop)>4){if(line.length)out.push(line.join(" "));line=[];curTop=r.top;}line.push(r.str);});if(line.length)out.push(line.join(" "));return out.join(nl?"\n":" ").trim();}
+    var pageItems=ranges.map(function(rg){var inb=body.filter(function(x){return x.top>=rg.top&&x.top<rg.bot;});
+      return {itemNo:colText(inb,0,false),desc:colText(inb,2,true),price:(colText(inb,3,false).match(/[\d][\d.,]*/)||[""])[0].replace(/,/g,""),remark:colText(inb,4,true),_rg:rg};});
+    pageItems=pageItems.filter(function(it){return (it.itemNo||it.desc||it.price);});
+    // 圖片：渲染整頁後裁 Picture 欄
+    try{
+      var scale=2.2;var vp2=page.getViewport({scale:scale});var cv=document.createElement("canvas");cv.width=Math.ceil(vp2.width);cv.height=Math.ceil(vp2.height);
+      await page.render({canvasContext:cv.getContext("2d"),viewport:vp2}).promise;
+      var descLeft=Wd;body.forEach(function(x){if(colOf(x.cx)===2&&x.x<descLeft)descLeft=x.x;});if(descLeft>=Wd)descLeft=bnds[2];
+      var px0=Math.max(0,bnds[1]-10)*scale,px1=(descLeft-4)*scale;
+      pageItems.forEach(function(it){var rg=it._rg;var sy=(rg.top+3)*scale,sh=(rg.bot-rg.top-6)*scale;var sx=px0+2*scale,sw=(px1-px0)-3*scale;
+        if(sw<12||sh<12)return;var c2=document.createElement("canvas");c2.width=Math.round(sw);c2.height=Math.round(sh);c2.getContext("2d").drawImage(cv,sx,sy,sw,sh,0,0,c2.width,c2.height);
+        if(!isBlankCanvas(c2))it.img=c2.toDataURL("image/jpeg",0.82);});
+    }catch(e){}
+    pageItems.forEach(function(it){delete it._rg;allItems.push(it);});
+  }
+  var hdr=parseQuoteImport(headerText.join("\n")).header;
+  return {header:hdr,items:allItems};
+}
+function importedToQuote(parsed,cid){
+  var ic=cid?getC(cid):null;var nd=newQuoteDoc(ic);
+  nd.title=((parsed.header.to||(ic&&ic.name)||"匯入")+"（老闆系統匯入 "+todayISO()+"）");
+  if(parsed.header.to&&!ic)nd.to=parsed.header.to;
+  if(parsed.header.attention)nd.attention=parsed.header.attention;
+  if(parsed.header.tel)nd.tel=parsed.header.tel;
+  if(parsed.header.date)nd.date=parsed.header.date;
+  if(parsed.header.currency)nd.currency=parsed.header.currency;
+  if(parsed.header.incoterm)nd.incoterm=parsed.header.incoterm;
+  nd.items=parsed.items.map(function(it){return Object.assign(newQuoteItem(),{itemNo:it.itemNo||"",desc:it.desc||"",price:it.price||"",remark:it.remark||"",img:it.img||""});});
+  S.data.quoteDocs.unshift(nd);S.quoteId=nd.id;return nd;
+}
 function newQuoteDoc(c){var ct=c?((c.contacts||[])[0]||{}):{};return {id:uid(),title:"",to:c?c.name:"",attention:ct.name||"",tel:ct.phone||"",incoterm:"EXWORK",currency:"USD",date:todayISO().replace(/-/g,"."),qtyLabel:"1K",showMOQ:"",customerId:c?c.id:"",projectId:"",channel:"Email",items:[newQuoteItem()],remarks:"1. Lead time: 30-45 days (to be confirmed)\n2. Validity of quotation: within 30 days to change\n3. Prices subject to change without notice.",createdAt:todayISO()};}
 function newQuoteItem(){return {id:uid(),img:"",itemNo:"",desc:"",price:"",remark:"",moq:"",cost:"",rate:"6.75",factor:"0.7",addons:[]};}
 function renderQuotes(){
@@ -1975,9 +2049,11 @@ function importqModal(d){
   d=d||{};
   var custOpts='<option value="">—（先選這張報價要歸給哪個客戶）—</option>'+S.data.customers.map(function(c){return '<option value="'+c.id+'"'+(d.cid===c.id?" selected":"")+'>'+esc(c.name)+'</option>';}).join("");
   var body=fld("歸給哪個客戶 *",'<select class="inp" id="impq_cust">'+custOpts+'</select>')+
-    fld("把老闆系統的報價「品項」貼進來",'<textarea class="inp" id="impq_text" rows="10" placeholder="最準：在老闆系統的報價表格上全選複製（或匯出的 Excel 複製整個表格），貼到這裡&#10;→ 會依 料號｜說明｜價格｜備註 自動分欄。&#10;&#10;也可以直接貼 PDF 裡的文字（會盡量解析出料號與價格）。"></textarea>')+
-    '<p class="muted" style="font-size:12px;margin:2px 0 0">按「解析並建立」後會生成一張新報價、把品項帶進來；產品圖片再到各品項用 Ctrl+V 貼上即可。</p>';
-  return shell("從老闆系統匯入報價",body,"解析並建立");
+    fld("方式一：直接上傳老闆系統的報價 PDF（推薦，會自動抓料號/說明/價格/圖片）",
+      '<label class="btn-soft" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;cursor:pointer">📄 選擇 PDF 檔<input type="file" id="impq_pdf" accept="application/pdf" style="display:none"></label><span id="impq_pdfname" class="muted" style="font-size:12px;margin-left:8px"></span>')+
+    fld("方式二：貼上表格文字（從 Excel/網頁表格複製最準）",'<textarea class="inp" id="impq_text" rows="6" placeholder="在老闆系統的報價表格上全選複製、或匯出的 Excel 複製整個表格，貼到這裡（依 料號｜說明｜價格｜備註 自動分欄）。"></textarea>')+
+    '<p class="muted" style="font-size:12px;margin:2px 0 0">上傳 PDF 會自動解析並建立報價（含圖片）；貼文字則按「解析並建立」。之後可再檢查/微調。</p>';
+  return shell("從老闆系統匯入報價",body,"解析並建立（文字）");
 }
 function sopModal(){
   var rows=S.data.settings.orderSop.map(function(tx,i){return '<div class="repeat"><span class="grow">'+(i+1)+'. '+esc(tx)+'</span><button class="delx" data-action="del-sopt" data-i="'+i+'">'+icon("trash",13)+'</button></div>';}).join("");
@@ -2352,18 +2428,9 @@ function saveModal(){
   else if(m.type==="importq"){
     var icid=rv("impq_cust");var itxt=(document.getElementById("impq_text")||{}).value||"";
     var parsed=parseQuoteImport(itxt);
-    if(!parsed.items.length){alert("沒有解析到品項。\n\n最保險：在老闆系統的報價『表格』上全選複製（或匯出的 Excel 複製整個表格）再貼上；要含料號與價格。");return;}
-    var ic=icid?getC(icid):null;var nd=newQuoteDoc(ic);
-    nd.title=((parsed.header.to||(ic&&ic.name)||"匯入")+"（老闆系統匯入 "+todayISO()+"）");
-    if(parsed.header.to&&!ic)nd.to=parsed.header.to;
-    if(parsed.header.attention)nd.attention=parsed.header.attention;
-    if(parsed.header.tel)nd.tel=parsed.header.tel;
-    if(parsed.header.date)nd.date=parsed.header.date;
-    if(parsed.header.currency)nd.currency=parsed.header.currency;
-    if(parsed.header.incoterm)nd.incoterm=parsed.header.incoterm;
-    nd.items=parsed.items.map(function(it){return Object.assign(newQuoteItem(),{itemNo:it.itemNo||"",desc:it.desc||"",price:it.price||"",remark:it.remark||""});});
-    S.data.quoteDocs.unshift(nd);S.quoteId=nd.id;S.modal=null;save();render();
-    showToast("已匯入 "+nd.items.length+" 個品項，請檢查、補圖片後即可用",null);return;
+    if(!parsed.items.length){alert("沒有解析到品項。\n\n用 PDF 直接上傳最準；貼文字則請從老闆系統的『表格』或 Excel 複製整個表格（要含料號與價格）。");return;}
+    var nd=importedToQuote(parsed,icid);S.modal=null;save();render();
+    showToast("已匯入 "+nd.items.length+" 個品項，請檢查後即可用",null);return;
   }
   var _tl=m._todoLabel;
   S.modal=null;save();renderModal();render();
@@ -2395,6 +2462,19 @@ document.addEventListener("input",function(e){
         var sug2=document.getElementById("sug-"+it2.id);if(sug2){var v2=calcSug(it2);sug2.textContent=v2!=null?v2:"—";}}}return;}
 });
 document.addEventListener("change",function(e){
+  if(e.target.id==="impq_pdf"){
+    var f=e.target.files&&e.target.files[0];if(!f)return;
+    var cid=(document.getElementById("impq_cust")||{}).value||"";
+    var nm=document.getElementById("impq_pdfname");if(nm)nm.textContent=f.name+"（解析中…）";
+    showToast("正在解析 PDF…",null);
+    f.arrayBuffer().then(function(ab){return parsePdfQuote(new Uint8Array(ab));}).then(function(parsed){
+      if(!parsed.items.length){alert("這份 PDF 沒有解析到品項。可改用『貼上表格文字』方式，或確認 PDF 內的文字可被選取。");if(nm)nm.textContent="";return;}
+      var nd=importedToQuote(parsed,cid);S.modal=null;save();renderModal();render();
+      var nimg=parsed.items.filter(function(x){return x.img;}).length;
+      showToast("PDF 已匯入 "+nd.items.length+" 個品項"+(nimg?("（含 "+nimg+" 張圖片）"):"")+"，請檢查",null);
+    }).catch(function(err){console.error(err);alert("PDF 解析失敗："+((err&&err.message)||err)+"\n可改用『貼上表格文字』方式。");if(nm)nm.textContent="";});
+    return;
+  }
   var cp=e.target.closest("[data-qf='custpick']");
   if(cp&&S.quoteId){var doc=QD(S.quoteId);var c=getC(cp.value);
     if(c){doc.customerId=c.id;doc.projectId="";doc.to=c.name;var ct=(c.contacts||[])[0];if(ct){doc.attention=ct.name||"";doc.tel=ct.phone||"";}save();render();}
