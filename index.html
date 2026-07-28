@@ -1460,13 +1460,59 @@ function todoPanel(w){
 
 /* ---------- 報價單 ---------- */
 function QD(id){return S.data.quoteDocs.filter(function(q){return q.id===id;})[0];}
+function parseQuoteImport(text){
+  var header={},items=[];var lines=(text||"").split(/\r?\n/);
+  function assignHeader(k,v){v=(v||"").trim();if(!v)return;
+    if(k==="TO")header.to=v;
+    else if(k==="ATTN"||k==="ATTENTION")header.attention=v;
+    else if(k==="TEL"){if(v!=="—"&&v!=="-")header.tel=v;}
+    else if(k==="DATE")header.date=v.replace(/-/g,".");
+    else if(k==="CURRENCY"){var mc=v.match(/[A-Za-z]{2,}/);if(mc)header.currency=mc[0].toUpperCase();}
+    else if(k==="INCO TERM"||k==="INCOTERM")header.incoterm=v;
+    else if(k==="EMAIL")header.email=v;
+  }
+  var keyRe=/\b(TO|ATTN|ATTENTION|TEL|DATE|CURRENCY|INCO\s*TERM|INCOTERM|EMAIL|PAYMENT)\s*[:：]\s*/gi;
+  lines.forEach(function(l){keyRe.lastIndex=0;var hits=[],m2;while((m2=keyRe.exec(l))){hits.push({key:m2[1].toUpperCase().replace(/\s+/g," "),vstart:keyRe.lastIndex,kstart:m2.index});}
+    for(var i=0;i<hits.length;i++){var end=(i+1<hits.length)?hits[i+1].kstart:l.length;assignHeader(hits[i].key,l.slice(hits[i].vstart,end));}});
+  var hasTab=text.indexOf("\t")>=0;
+  var priceOnly=/^\$?\s*\d[\d,]*(?:\.\d+)?\s*$/;
+  if(hasTab){
+    lines.forEach(function(l){
+      if(!l.trim())return;
+      var cols=l.split("\t").map(function(x){return x.trim();});
+      if(cols.length<2)return;
+      var jl=cols.join(" ").toLowerCase();
+      if((jl.indexOf("item code")>=0)||(jl.indexOf("description")>=0&&jl.indexOf("price")>=0))return;
+      var pIdx=-1;for(var i=cols.length-1;i>=1;i--){if(priceOnly.test(cols[i])){pIdx=i;break;}}
+      var price=pIdx>=0?cols[pIdx].replace(/[$,\s]/g,""):"";
+      var code=cols[0];var rest=[];for(var j=1;j<cols.length;j++){if(j===pIdx)continue;if(cols[j])rest.push(cols[j]);}
+      var desc=rest.length?rest[0]:"",remark=rest.length>1?rest.slice(1).join("\n"):"";
+      if((code||desc||price)&&!(cols.length===1))items.push({itemNo:code,desc:desc,price:price,remark:remark});
+    });
+  }else{
+    var buf=[];var codeRe=/^([A-Z][A-Z0-9][A-Z0-9\-]{1,})\b/;
+    var skip=/^(QUOTATION|REMARK|LEAD\s*TIME|VALIDITY|PRICE\s+SUBJECT|Sales|Email|Tel|TO\s*[:：]|ATTN|ATTENTION|DATE\s*[:：]|CURRENCY|EMAIL|INCO|PAYMENT|Item\s*Code|Price\b|Picture|Description\b)/i;
+    lines.forEach(function(l){
+      var t=l.trim();if(!t)return;
+      var mp=t.match(/(\d+(?:\.\d+)?)\s*$/);
+      var mc=t.match(codeRe);
+      if(mc&&mp&&mc.index===0&&/\d/.test(mc[1])){
+        var code=mc[1];var mid=t.slice(code.length,t.length-mp[1].length).trim();
+        var desc=(buf.join(" ")+" "+mid).replace(/\s+/g," ").trim();
+        items.push({itemNo:code,desc:desc,price:mp[1],remark:""});buf=[];
+      }else if(skip.test(t)){/* ignore */}
+      else buf.push(t);
+    });
+  }
+  return {header:header,items:items};
+}
 function newQuoteDoc(c){var ct=c?((c.contacts||[])[0]||{}):{};return {id:uid(),title:"",to:c?c.name:"",attention:ct.name||"",tel:ct.phone||"",incoterm:"EXWORK",currency:"USD",date:todayISO().replace(/-/g,"."),qtyLabel:"1K",showMOQ:"",customerId:c?c.id:"",projectId:"",channel:"Email",items:[newQuoteItem()],remarks:"1. Lead time: 30-45 days (to be confirmed)\n2. Validity of quotation: within 30 days to change\n3. Prices subject to change without notice.",createdAt:todayISO()};}
 function newQuoteItem(){return {id:uid(),img:"",itemNo:"",desc:"",price:"",remark:"",moq:"",cost:"",rate:"6.75",factor:"0.7",addons:[]};}
 function renderQuotes(){
   if(S.quoteId){var doc=QD(S.quoteId);if(doc)return quoteEditor(doc);S.quoteId=null;}
   var docs=S.data.quoteDocs;
   var h='<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><h2 class="sectitle">📄 報價單</h2><p class="subt">照公司格式做報價單，填好按「列印 / 存 PDF」直接出給客戶。成本試算只有你看得到。</p></div>'+
-    '<div class="row"><button class="btn-soft" data-action="edit-qcompany" style="padding:7px 14px">公司抬頭</button><button class="btn-dark" data-action="new-quote">'+icon("plus",16)+' 新增報價單</button></div></div>';
+    '<div class="row"><button class="btn-soft" data-action="edit-qcompany" style="padding:7px 14px">公司抬頭</button><button class="btn-soft" data-action="import-quote" style="padding:7px 14px">⇩ 從老闆系統匯入</button><button class="btn-dark" data-action="new-quote">'+icon("plus",16)+' 新增報價單</button></div></div>';
   if(!docs.length)return h+'<div class="empty"><div class="big">📄</div><p>還沒有報價單，點「新增報價單」開始</p></div>';
   h+='<p class="subt" style="margin:-6px 0 6px">依客戶分組，同一個客戶的歷史報價由新到舊列在一起。點任一列打開；右側可複製或刪除。</p>';
   // 依客戶分組
@@ -1807,6 +1853,7 @@ function renderModal(){
   else if(m.type==="exchange")b=exchangeModal(m.draft);
   else if(m.type==="cats")b=catsModal();
   else if(m.type==="sop")b=sopModal();
+  else if(m.type==="importq")b=importqModal(m.draft);
   else if(m.type==="ostatus")b=ostatusModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
@@ -1923,6 +1970,14 @@ function qcompanyModal(){
     fld("地址（可多行）",'<textarea class="inp" rows="3" id="qc_addr">'+esc(qc.addr)+'</textarea>')+
     fld("電話 / 傳真 / 網站",'<input class="inp" id="qc_tel" value="'+esc(qc.tel)+'">');
   return shell("報價單公司抬頭",body);
+}
+function importqModal(d){
+  d=d||{};
+  var custOpts='<option value="">—（先選這張報價要歸給哪個客戶）—</option>'+S.data.customers.map(function(c){return '<option value="'+c.id+'"'+(d.cid===c.id?" selected":"")+'>'+esc(c.name)+'</option>';}).join("");
+  var body=fld("歸給哪個客戶 *",'<select class="inp" id="impq_cust">'+custOpts+'</select>')+
+    fld("把老闆系統的報價「品項」貼進來",'<textarea class="inp" id="impq_text" rows="10" placeholder="最準：在老闆系統的報價表格上全選複製（或匯出的 Excel 複製整個表格），貼到這裡&#10;→ 會依 料號｜說明｜價格｜備註 自動分欄。&#10;&#10;也可以直接貼 PDF 裡的文字（會盡量解析出料號與價格）。"></textarea>')+
+    '<p class="muted" style="font-size:12px;margin:2px 0 0">按「解析並建立」後會生成一張新報價、把品項帶進來；產品圖片再到各品項用 Ctrl+V 貼上即可。</p>';
+  return shell("從老闆系統匯入報價",body,"解析並建立");
 }
 function sopModal(){
   var rows=S.data.settings.orderSop.map(function(tx,i){return '<div class="repeat"><span class="grow">'+(i+1)+'. '+esc(tx)+'</span><button class="delx" data-action="del-sopt" data-i="'+i+'">'+icon("trash",13)+'</button></div>';}).join("");
@@ -2070,6 +2125,7 @@ document.addEventListener("click",function(e){
   if(a==="add-part"){if(!Array.isArray(S.data.partReqs))S.data.partReqs=[];var npr={id:uid(),createdAt:todayISO(),date:todayISO(),subject:"",status:"申請中",customer:"",note:""};S.data.partReqs.unshift(npr);save();render();var fe=document.querySelector('.oin[data-prid="'+npr.id+'"][data-pf="subject"]');if(fe){fe.focus();fe.scrollIntoView({block:"center",behavior:"smooth"});}return;}
   if(a==="del-part"){var parr=S.data.partReqs,ppp=parr.filter(function(x){return x.id===t.getAttribute("data-prid");})[0],pidx=parr.indexOf(ppp);softDelete("已刪除一筆料號申請",function(){parr.splice(pidx,1);},function(){parr.splice(Math.min(pidx,parr.length),0,ppp);});return;}
   if(a==="pfilter"){S.filter=t.getAttribute("data-f");render();return;}
+  if(a==="import-quote"){S.modal={type:"importq",draft:{}};renderModal();return;}
   if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
   if(a==="add-sopt"){var sv=document.getElementById("sopt_new").value.trim();if(sv){S.data.settings.orderSop.push(sv);save();renderModal();}return;}
   if(a==="del-sopt"){S.data.settings.orderSop.splice(parseInt(t.getAttribute("data-i"),10),1);save();renderModal();return;}
@@ -2293,6 +2349,22 @@ function saveModal(){
   else if(m.type==="qcompany"){S.data.quoteCompany={zh:rv("qc_zh"),en:rv("qc_en"),addr:rv("qc_addr"),tel:rv("qc_tel")};}
   else if(m.type==="cats"){if(m.backTo){S.modal=m.backTo;save();renderModal();render();return;}S.modal=null;save();render();return;}
   else if(m.type==="sop"){var sv2=document.getElementById("sopt_new");if(sv2&&sv2.value.trim())S.data.settings.orderSop.push(sv2.value.trim());S.modal=null;save();renderModal();render();return;}
+  else if(m.type==="importq"){
+    var icid=rv("impq_cust");var itxt=(document.getElementById("impq_text")||{}).value||"";
+    var parsed=parseQuoteImport(itxt);
+    if(!parsed.items.length){alert("沒有解析到品項。\n\n最保險：在老闆系統的報價『表格』上全選複製（或匯出的 Excel 複製整個表格）再貼上；要含料號與價格。");return;}
+    var ic=icid?getC(icid):null;var nd=newQuoteDoc(ic);
+    nd.title=((parsed.header.to||(ic&&ic.name)||"匯入")+"（老闆系統匯入 "+todayISO()+"）");
+    if(parsed.header.to&&!ic)nd.to=parsed.header.to;
+    if(parsed.header.attention)nd.attention=parsed.header.attention;
+    if(parsed.header.tel)nd.tel=parsed.header.tel;
+    if(parsed.header.date)nd.date=parsed.header.date;
+    if(parsed.header.currency)nd.currency=parsed.header.currency;
+    if(parsed.header.incoterm)nd.incoterm=parsed.header.incoterm;
+    nd.items=parsed.items.map(function(it){return Object.assign(newQuoteItem(),{itemNo:it.itemNo||"",desc:it.desc||"",price:it.price||"",remark:it.remark||""});});
+    S.data.quoteDocs.unshift(nd);S.quoteId=nd.id;S.modal=null;save();render();
+    showToast("已匯入 "+nd.items.length+" 個品項，請檢查、補圖片後即可用",null);return;
+  }
   var _tl=m._todoLabel;
   S.modal=null;save();renderModal();render();
   if(_tl)showToast("已加到「"+_tl+"」待辦",null);
