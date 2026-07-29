@@ -391,6 +391,21 @@ body.colresizing .oin{pointer-events:none}
 .paychip{flex:none;font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;border:1.5px solid #F2D7DD;color:#C23A55;background:#FBE9ED;white-space:nowrap;transition:transform .12s,background .18s}
 .paychip:active{transform:scale(.94)}
 .paychip.on{border-color:#BFE3CC;color:#357B50;background:#E6F4EB}
+.paychip.part{border-color:#EEDFB4;color:#8F681A;background:#FAF1DC}
+.paywrap{margin-top:11px;border-top:1px dashed var(--line);padding-top:9px}
+.payprog{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;background:#FBE9ED;color:#C23A55}
+.payprog.part{background:#FAF1DC;color:#8F681A}.payprog.ok{background:var(--grl);color:#357B50}
+.paytable{width:100%;border-collapse:collapse;margin-top:6px;table-layout:fixed}
+.paytable th{font-size:11px;color:var(--muted);text-align:left;font-weight:600;padding:2px 6px 3px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+.paytable td{padding:3px 6px 3px 0;border-bottom:1px dashed #EDEDEA;vertical-align:middle}
+.paytable tr:last-child td{border-bottom:none}
+.paytable col:nth-child(1){width:34%}
+.paytable .oin{font-size:12.5px;padding:3px 6px}
+.paytable .num{text-align:right;font-variant-numeric:tabular-nums}
+.paytable tr.paid td{background:rgba(230,244,235,.5)}
+.paychk{flex:none;width:19px;height:19px;border-radius:6px;border:2px solid #CBD0DA;color:#fff;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;background:#fff;transition:transform .12s,background .18s,border-color .18s}
+.paychk:hover{border-color:#3E8A5C}.paychk:active{transform:scale(.9)}
+.paychk.on{background:#3E8A5C;border-color:#3E8A5C;animation:pop .25s ease}
 /* 報價單依客戶分組（柔和卡片列，跟全站一致） */
 .qgroupsec{margin-top:22px}
 .qghead{display:flex;align-items:center;gap:9px;margin:0 4px 9px;padding-left:2px}
@@ -567,6 +582,19 @@ function num(v){var n=parseFloat(String(v==null?"":v).replace(/,/g,""));return i
 function fmtMoney(n){if(!isFinite(n))n=0;return n.toLocaleString("en-US",{maximumFractionDigits:2});}
 function orderItems(o){if(Array.isArray(o.items)&&o.items.length)return o.items;return [{pn:o.pn||"",qty:o.qty||"",price:o.price||""}];}
 function orderAmount(o){return orderItems(o).reduce(function(s,it){return s+num(it.qty)*num(it.price);},0);}
+function orderPaid(o){var ps=o.payments||[];return ps.length?ps.every(function(p){return p.done;}):!!o.paid;}
+function orderReceived(o){return (o.payments||[]).reduce(function(s,p){var v=(p.received!==""&&p.received!=null)?num(p.received):(p.done?num(p.expected):0);return s+v;},0);}
+function orderOutstanding(o){if(orderPaid(o))return 0;return Math.max(0,orderAmount(o)-orderReceived(o));}
+function markOrderFullPaid(o){var amt=orderAmount(o);o.payments=[{id:uid(),label:"全額",expected:String(amt||""),received:String(amt||""),date:todayISO(),done:true}];o.paid=true;o.paidDate=todayISO();}
+function markOrderUnpaid(o){o.payments=[];o.paid=false;o.paidDate="";}
+function syncOrderPaid(o){o.paid=orderPaid(o);}
+function updateOrderPayDom(o){
+  var fp=orderPaid(o),rec=orderReceived(o),amt=orderAmount(o),out=orderOutstanding(o),cur=o.currency||"USD";
+  var pp=document.getElementById("payprog-"+o.id);
+  if(pp){pp.className="payprog "+(fp?"ok":(rec>0?"part":"due"));pp.textContent=cur+" "+fmtMoney(rec)+" / "+fmtMoney(amt)+(out>0.01?("　待收 "+fmtMoney(out)):(fp?"　✓ 收訖":""));}
+  var pc=document.getElementById("paychip-"+o.id);
+  if(pc){pc.className="paychip"+(fp?" on":(rec>0?" part":""));pc.textContent=fp?("💰 已收訖"+((rec&&Math.abs(rec-amt)>0.01)?("（實收 "+fmtMoney(rec)+"）"):"")):(rec>0?("💰 已收 "+fmtMoney(rec)+" · 待收 "+fmtMoney(out)):("💰 待收 "+cur+" "+fmtMoney(amt)));}
+}
 function orderPNs(o){return orderItems(o).map(function(it){return (it.pn||"").trim();}).filter(Boolean).join(", ");}
 function custRevenue(c){var by={};(c.orders||[]).forEach(function(o){var cur=o.currency||"USD";by[cur]=(by[cur]||0)+orderAmount(o);});return by;}
 function revenueText(by){var ks=Object.keys(by).filter(function(k){return by[k]>0;});return ks.map(function(k){return k+" "+fmtMoney(by[k]);}).join(" + ");}
@@ -706,6 +734,9 @@ function normalize(d){
       if(!o.status)o.status="生產中";if(d.settings.orderStatuses.indexOf(o.status)<0)d.settings.orderStatuses.push(o.status);
       if(!o.currency)o.currency="USD";
       if(o.paid==null)o.paid=(o.status==="已收款"||o.status==="結案");if(o.paidDate==null)o.paidDate="";
+      if(o.payTerms==null)o.payTerms="";
+      if(!Array.isArray(o.payments)){o.payments=[];if(o.paid){var amt0=orderAmount(o);o.payments.push({id:uid(),label:"全額",expected:String(amt0||""),received:String(amt0||""),date:o.paidDate||"",done:true});}}
+      o.payments.forEach(function(p){if(!p.id)p.id=uid();["label","expected","received","date"].forEach(function(k){if(p[k]==null)p[k]="";});if(p.done==null)p.done=false;});
       ["od","custDelivery","po","pn","qty","price","csNo","cpNo","pcNo","factoryDelivery","factory","shipDate","arNo","note"].forEach(function(k){if(o[k]==null)o[k]="";});
       if(!Array.isArray(o.items)||!o.items.length)o.items=[{id:uid(),pn:o.pn||"",qty:o.qty||"",price:o.price||""}];
       o.items.forEach(function(it){if(!it.id)it.id=uid();["pn","qty","price","desc","remark"].forEach(function(k){if(it[k]==null)it[k]="";});});
@@ -798,7 +829,7 @@ function dashLists(){
   var unpaid=[];
   S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){
     if(o.status==="生產中"&&o.custDelivery){var dd=daysSince(o.custDelivery);if(dd>=-lead)orderDue.push({c:c,o:o,late:dd});}
-    if(!o.paid&&o.status!=="取消"&&(o.shipDate||o.status==="已出貨"||o.status==="結案")){unpaid.push({c:c,o:o,late:o.shipDate?daysSince(o.shipDate):0});}
+    if(!orderPaid(o)&&o.status!=="取消"&&(o.shipDate||o.status==="已出貨"||o.status==="結案")){unpaid.push({c:c,o:o,late:o.shipDate?daysSince(o.shipDate):0});}
   });});
   toChase.sort(function(a,b){return b.late-a.late;});
   holds.sort(function(a,b){return b.late-a.late;});
@@ -872,11 +903,12 @@ function renderDash(){
     return {c:x.c,subj:(orderPNs(x.o)||x.o.po||"（未填料號）")+(x.o.po?(" · PO "+x.o.po):""),complaint:false,
       reason:'<span class="rz" style="color:#4A55BC">'+icon("truck",12)+' '+esc(x.o.custDelivery)+' · '+cnt+'</span>'};
   });
-  if(d.unpaid.length)h+=dashList("💰 待收款","已出貨（或有出貨日）但還沒收到款的訂單，記得跟客人請款",d.unpaid,"#C23A55",false,function(x){
-    var amt=esc(x.o.currency||"USD")+" "+fmtMoney(orderAmount(x.o));
+  if(d.unpaid.length)h+=dashList("💰 待收款","已出貨（或有出貨日）但還沒收齊款的訂單，記得跟客人請款",d.unpaid,"#C23A55",false,function(x){
+    var cur=x.o.currency||"USD",out=orderOutstanding(x.o),recd=orderReceived(x.o);
+    var amt=(recd>0?('已收 '+fmtMoney(recd)+' · 待收 '+cur+' '+fmtMoney(out)):('未收 '+cur+' '+fmtMoney(orderAmount(x.o))));
     var since=x.o.shipDate?(' · 出貨 '+esc(x.o.shipDate)+(x.late>0?('（'+x.late+' 天）'):'')):'';
     return {c:x.c,subj:(orderPNs(x.o)||x.o.po||"（訂單）")+(x.o.po?(" · PO "+x.o.po):""),complaint:false,
-      reason:'<span class="rz" style="color:#C23A55">💰 未收 '+amt+since+'</span>'};
+      reason:'<span class="rz" style="color:#C23A55">💰 '+amt+since+'</span>'};
   });
 
   h+='<section style="margin-top:30px"><h3 class="sectitle" style="font-size:16px;color:var(--muted)">參考資訊</h3>'+
@@ -1241,7 +1273,11 @@ function orderCard(c,o,withCust){
   var stOpts=orderStatuses().slice();if(stOpts.indexOf(o.status)<0)stOpts.unshift(o.status);
   var stSel='<select class="statussel sm" data-action="set-order-status" data-cid="'+c.id+'" data-oid="'+o.id+'" style="'+orderStyle(o.status)+'">'+
     stOpts.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
-  var payBtn='<button class="paychip'+(o.paid?' on':'')+'" data-action="toggle-paid" data-cid="'+c.id+'" data-oid="'+o.id+'" title="'+(o.paid?"已收款，點一下改回待收":"點一下標記已收款")+'">'+(o.paid?('💰 已收款'+(o.paidDate?' '+esc(o.paidDate):'')):'💰 待收款')+'</button>';
+  var fp=orderPaid(o),rec=orderReceived(o),amt=orderAmount(o),outst=orderOutstanding(o),ocur=o.currency||"USD",hasInst=(o.payments&&o.payments.length>0);
+  var payLabel=fp?('💰 已收訖'+((rec&&Math.abs(rec-amt)>0.01)?('（實收 '+fmtMoney(rec)+'）'):'')):(rec>0?('💰 已收 '+fmtMoney(rec)+' · 待收 '+fmtMoney(outst)):('💰 待收 '+ocur+' '+fmtMoney(amt)));
+  var payCls='paychip'+(fp?' on':(rec>0?' part':''));
+  var payBtn=hasInst?('<span class="'+payCls+'" id="paychip-'+o.id+'" title="收款明細在卡片下方">'+payLabel+'</span>')
+    :('<button class="'+payCls+'" id="paychip-'+o.id+'" data-action="toggle-paid" data-cid="'+c.id+'" data-oid="'+o.id+'" title="'+(fp?"已收訖，點一下改回待收":"點一下標記全額收訖；分期請用下方明細")+'">'+payLabel+'</button>');
   var curSel='<select class="oin" '+da+' data-of="currency" style="width:auto;font-weight:700;color:#357B50;padding:2px 4px">'+
     ORDER_CURRENCIES.map(function(x){return '<option'+((o.currency||"USD")===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
   var collapsed=!!S.orderCollapse[o.id];
@@ -1299,7 +1335,31 @@ function orderCard(c,o,withCust){
       (s.done&&s.doneAt?'<span class="muted" style="font-size:11px;flex:none">'+esc(s.doneAt)+'</span>':"")+
       '<button class="iconmini del" data-action="del-sop" data-cid="'+c.id+'" data-oid="'+o.id+'" data-sid="'+s.id+'">'+icon("x",11)+'</button></div>';
   }).join("");
-  h+='</div></div></div>';
+  h+='</div>';
+  // ── 收款明細（分期＋實收）──
+  var pda='data-ocid="'+c.id+'" data-oid="'+o.id+'"';
+  var pmts=o.payments||[];
+  var payStatus=fp?'ok':(rec>0?'part':'due');
+  h+='<div class="paywrap"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:3px;flex-wrap:wrap;gap:6px">'+
+    '<span style="font-size:12px;font-weight:700;color:#55506a">💵 收款 <span class="payprog '+payStatus+'" id="payprog-'+o.id+'">'+ocur+' '+fmtMoney(rec)+' / '+fmtMoney(amt)+(outst>0.01?('　待收 '+fmtMoney(outst)):(fp?'　✓ 收訖':''))+'</span></span>'+
+    '<span class="row" style="gap:6px">'+(fp?'<button class="qb" data-action="clear-paid" data-cid="'+c.id+'" data-oid="'+o.id+'" style="padding:2px 9px">改回待收</button>':'<button class="qb" data-action="quick-fullpaid" data-cid="'+c.id+'" data-oid="'+o.id+'" style="padding:2px 9px">✓ 全額收訖</button>')+
+    '<button class="qb" data-action="add-payment" data-cid="'+c.id+'" data-oid="'+o.id+'" style="padding:2px 9px">＋ 加一期</button></span></div>';
+  h+='<input class="oin" '+pda+' data-of="payTerms" value="'+esc(o.payTerms)+'" placeholder="付款條件（例：FCA SZ, 30% 訂金, 8月底 35%, 出貨前 35%）" style="border:1px solid var(--line);background:rgba(255,255,255,.5);font-size:12.5px;margin-bottom:4px">';
+  if(pmts.length){
+    h+='<table class="paytable"><thead><tr><th>期別 / 說明</th><th>應收</th><th>實收</th><th>收款日</th><th></th><th></th></tr></thead><tbody>'+
+      pmts.map(function(p){var ipa='data-ocid="'+c.id+'" data-oid="'+o.id+'" data-pyid="'+p.id+'"';
+        return '<tr class="'+(p.done?"paid":"")+'">'+
+          '<td><input class="oin" '+ipa+' data-payf="label" value="'+esc(p.label)+'" placeholder="如 訂金30%"></td>'+
+          '<td><input class="oin num" '+ipa+' data-payf="expected" inputmode="decimal" value="'+esc(p.expected)+'" placeholder="應收"></td>'+
+          '<td><input class="oin num" '+ipa+' data-payf="received" inputmode="decimal" value="'+esc(p.received)+'" placeholder="實收(含手續費差)"></td>'+
+          '<td><input class="oin" type="date" '+ipa+' data-payf="date" value="'+esc(p.date)+'"></td>'+
+          '<td><button class="paychk'+(p.done?' on':'')+'" data-action="toggle-paydone" data-cid="'+c.id+'" data-oid="'+o.id+'" data-pyid="'+p.id+'" title="標記這期已收">'+(p.done?"✓":"")+'</button></td>'+
+          '<td><button class="iconmini del" data-action="del-payment" data-cid="'+c.id+'" data-oid="'+o.id+'" data-pyid="'+p.id+'">'+icon("x",11)+'</button></td>'+
+          '</tr>';
+      }).join("")+'</tbody></table>';
+  }
+  h+='</div>';
+  h+='</div></div>';
   return h;
 }
 function orderDueCell(o){
@@ -2213,7 +2273,16 @@ document.addEventListener("click",function(e){
   if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
   if(a==="add-sopt"){var sv=document.getElementById("sopt_new").value.trim();if(sv){S.data.settings.orderSop.push(sv);save();renderModal();}return;}
   if(a==="del-sopt"){S.data.settings.orderSop.splice(parseInt(t.getAttribute("data-i"),10),1);save();renderModal();return;}
-  if(a==="toggle-paid"){var pcid=t.getAttribute("data-cid")||S.selectedId;var poc=getC(pcid);var poo=poc&&(poc.orders||[]).filter(function(o){return o.id===t.getAttribute("data-oid");})[0];if(poo){poo.paid=!poo.paid;poo.paidDate=poo.paid?todayISO():"";save();render();}return;}
+  if(a==="toggle-paid"||a==="quick-fullpaid"||a==="clear-paid"||a==="add-payment"||a==="del-payment"||a==="toggle-paydone"){
+    var pcid=t.getAttribute("data-cid")||S.selectedId;var poc=getC(pcid);var poo=poc&&(poc.orders||[]).filter(function(o){return o.id===t.getAttribute("data-oid");})[0];if(!poo)return;
+    if(!Array.isArray(poo.payments))poo.payments=[];
+    if(a==="toggle-paid"){if(orderPaid(poo))markOrderUnpaid(poo);else markOrderFullPaid(poo);}
+    else if(a==="quick-fullpaid"){markOrderFullPaid(poo);}
+    else if(a==="clear-paid"){markOrderUnpaid(poo);}
+    else if(a==="add-payment"){poo.payments.push({id:uid(),label:"",expected:"",received:"",date:"",done:false});}
+    else if(a==="del-payment"){poo.payments=poo.payments.filter(function(p){return p.id!==t.getAttribute("data-pyid");});syncOrderPaid(poo);}
+    else if(a==="toggle-paydone"){var py=poo.payments.filter(function(p){return p.id===t.getAttribute("data-pyid");})[0];if(py){py.done=!py.done;if(py.done){if(!py.date)py.date=todayISO();if((py.received||"")===""&&(py.expected||"")!=="")py.received=py.expected;}syncOrderPaid(poo);}}
+    save();render();return;}
   if(a==="ostatus-mgr"){S.modal={type:"ostatus"};renderModal();return;}
   if(a==="add-ostatus"){var osv=document.getElementById("ostatus_new").value.trim();if(osv&&S.data.settings.orderStatuses.indexOf(osv)<0){S.data.settings.orderStatuses.push(osv);save();renderModal();render();}return;}
   if(a==="del-ostatus"){if(S.data.settings.orderStatuses.length<=1){alert("至少要留一個狀態。");return;}S.data.settings.orderStatuses.splice(parseInt(t.getAttribute("data-i"),10),1);save();renderModal();render();return;}
@@ -2352,7 +2421,7 @@ document.addEventListener("change",function(e){
     p.stage=v;p.hold=null;p.archived=false;touch(p);save();render();return;}
   var oss=e.target.closest("[data-action='set-order-status']");
   if(oss){var occ=getC(oss.getAttribute("data-cid"));var oo2=occ&&(occ.orders||[]).filter(function(o){return o.id===oss.getAttribute("data-oid");})[0];
-    if(oo2){oo2.status=oss.value;if(oss.value==="已出貨"&&!oo2.shipDate)oo2.shipDate=todayISO();if((oss.value==="已收款"||oss.value==="結案")&&!oo2.paid){oo2.paid=true;oo2.paidDate=todayISO();}save();render();}return;}
+    if(oo2){oo2.status=oss.value;if(oss.value==="已出貨"&&!oo2.shipDate)oo2.shipDate=todayISO();if((oss.value==="已收款"||oss.value==="結案")&&!orderPaid(oo2))markOrderFullPaid(oo2);save();render();}return;}
   var osr=e.target.closest(".osrename");
   if(osr){var oldn=osr.getAttribute("data-old"),newn=osr.value.trim();
     if(newn&&newn!==oldn){var arr=S.data.settings.orderStatuses,ix=arr.indexOf(oldn);
@@ -2362,6 +2431,8 @@ document.addEventListener("change",function(e){
     return;}
   var ofc=e.target.closest("[data-of]");
   if(ofc){var ofco=orderByEl(ofc);if(ofco){ofco[ofc.getAttribute("data-of")]=ofc.value;save();if(ofc.type==="date"||ofc.tagName==="SELECT")render();}return;}
+  var pyc=e.target.closest("[data-payf]");
+  if(pyc){var pyco=orderByEl(pyc);if(pyco){var pycp=(pyco.payments||[]).filter(function(x){return x.id===pyc.getAttribute("data-pyid");})[0];if(pycp){pycp[pyc.getAttribute("data-payf")]=pyc.value;save();updateOrderPayDom(pyco);}}return;}
   var pss=e.target.closest("[data-action='set-part-status']");
   if(pss){var pso=(S.data.partReqs||[]).filter(function(x){return x.id===pss.getAttribute("data-prid");})[0];if(pso){pso.status=pss.value;save();render();}return;}
   var pfc=e.target.closest("[data-pf]");
@@ -2452,6 +2523,8 @@ document.addEventListener("input",function(e){
   if(ofld){var ofo=orderByEl(ofld);if(ofo){ofo[ofld.getAttribute("data-of")]=ofld.value;save();}return;}
   var oifld=e.target.closest("[data-oif]");
   if(oifld){var oio=orderByEl(oifld);if(oio){var oit=(oio.items||[]).filter(function(x){return x.id===oifld.getAttribute("data-iid");})[0];if(oit){oit[oifld.getAttribute("data-oif")]=oifld.value;oio.pn=orderPNs(oio);save();updateOrderAmtDom(oio);}}return;}
+  var pyfld=e.target.closest("[data-payf]");
+  if(pyfld){var pyo=orderByEl(pyfld);if(pyo){var pyp=(pyo.payments||[]).filter(function(x){return x.id===pyfld.getAttribute("data-pyid");})[0];if(pyp){pyp[pyfld.getAttribute("data-payf")]=pyfld.value;save();updateOrderPayDom(pyo);}}return;}
   var pfld=e.target.closest("[data-pf]");
   if(pfld){var ppo=partByEl(pfld);if(ppo){ppo[pfld.getAttribute("data-pf")]=pfld.value;save();}return;}
   var qt=e.target.closest("[data-qtitle]");
