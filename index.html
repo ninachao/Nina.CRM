@@ -441,6 +441,8 @@ body.colresizing .oin{pointer-events:none}
 .ptable tr:last-child td{border-bottom:none}
 .ptable tbody tr:hover{background:#FBFBF9}
 .ptable .oin{font-size:12.5px;padding:4px 6px}
+.ptable input.oin{text-overflow:ellipsis}
+.ptable select.custsel{text-overflow:ellipsis;overflow:hidden;white-space:nowrap;padding-right:20px;max-width:100%}
 .ptable .ptnote{resize:vertical;min-height:26px;line-height:1.45;white-space:pre-wrap;font-family:inherit;field-sizing:content}
 .ptable .del{opacity:0}
 .ptable tr:hover .del{opacity:1}
@@ -1485,7 +1487,7 @@ function renderPitches(){
         head+='<div class="gcontacts"><span class="gcontact muted">尚未建立聯絡窗口的 email — <button data-action="open" data-id="'+g.cid+'" style="color:var(--violet);font-weight:700">去客戶頁加一個</button></span></div>';
       }
     }
-    var tbl='<div class="ptwrap"><table class="ptable"><colgroup><col style="width:128px"><col style="width:150px"><col style="width:130px"><col><col style="width:126px"><col style="width:88px"><col style="width:110px"><col style="width:28px"></colgroup>'+
+    var tbl='<div class="ptwrap"><table class="ptable"><colgroup><col style="width:118px"><col style="width:140px"><col style="width:180px"><col><col style="width:118px"><col style="width:88px"><col style="width:150px"><col style="width:28px"></colgroup>'+
       '<thead><tr><th>推薦日期</th><th>郵件主旨</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>結果</th><th>客戶（可改）</th><th></th></tr></thead><tbody>'+
       g.list.map(pitchRow).join("")+'</tbody></table></div>';
     return '<div class="qgroupsec">'+head+tbl+'</div>';
@@ -1497,12 +1499,13 @@ function pitchRow(p){
   var stSel='<select class="statussel sm" data-action="set-pitch-status" data-piid="'+p.id+'" style="'+PITCH_STYLE[p.status]+';font-size:11px;padding:3px 20px 3px 8px">'+
     PITCH_STATUS.map(function(s){return '<option'+(s===p.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
   var fuWarn=(p.followUp&&p.status!=="無需求"&&p.status!=="成交"&&p.followUp<=todayISO())?' style="border-color:#F2D7DD;background:#FBE9ED"':'';
-  var custSel='<select class="oin sm" '+da+' data-ptf="customer" style="color:#4A55BC;font-size:12px"><option value="">— 未綁 —</option>'+
+  var curCust=p.customer?getC(p.customer):null;
+  var custSel='<select class="oin custsel" '+da+' data-ptf="customer" title="'+esc(curCust?curCust.name:"未綁客戶")+'" style="color:#4A55BC;font-size:12px"><option value="">— 未綁 —</option>'+
     S.data.customers.map(function(c){return '<option value="'+c.id+'"'+(p.customer===c.id?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>';
   return '<tr>'+
     '<td><input class="oin" type="date" '+da+' data-ptf="date" value="'+esc(p.date)+'"></td>'+
-    '<td><input class="oin" '+da+' data-ptf="subject" value="'+esc(p.subject)+'" placeholder="信件主旨…"></td>'+
-    '<td><input class="oin" '+da+' data-ptf="product" value="'+esc(p.product)+'" placeholder="磁鐵支架、平板架…" style="font-weight:600"></td>'+
+    '<td><input class="oin" '+da+' data-ptf="subject" value="'+esc(p.subject)+'" title="'+esc(p.subject)+'" placeholder="信件主旨…"></td>'+
+    '<td><input class="oin" '+da+' data-ptf="product" value="'+esc(p.product)+'" title="'+esc(p.product)+'" placeholder="磁鐵支架、平板架…" style="font-weight:600"></td>'+
     '<td><textarea class="oin ptnote" '+da+' data-ptf="feedback" rows="1" placeholder="例：9/27 聯繫過，目前沒有支架需求">'+esc(p.feedback)+'</textarea></td>'+
     '<td><input class="oin" type="date" '+da+' data-ptf="followUp" value="'+esc(p.followUp)+'"'+fuWarn+'></td>'+
     '<td>'+stSel+'</td>'+
