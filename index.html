@@ -708,6 +708,8 @@ function normalize(d){
   if(!Array.isArray(d.vendors))d.vendors=[];
   if(!Array.isArray(d.partReqs))d.partReqs=[];
   d.partReqs.forEach(function(p){if(!p.id)p.id=uid();if(PART_STATUS.indexOf(p.status)<0)p.status="申請中";["date","subject","note","customer"].forEach(function(k){if(p[k]==null)p[k]="";});if(!p.createdAt)p.createdAt=p.date||todayISO();});
+  if(!Array.isArray(d.pitches))d.pitches=[];
+  d.pitches.forEach(function(p){if(!p.id)p.id=uid();if(PITCH_STATUS.indexOf(p.status)<0)p.status="待回覆";["date","product","feedback","customer","followUp"].forEach(function(k){if(p[k]==null)p[k]="";});if(!p.createdAt)p.createdAt=p.date||todayISO();});
   if(!Array.isArray(d.todoWeeks))d.todoWeeks=[];
   d.todoWeeks.forEach(function(w){(w.items||[]).forEach(function(it){
     if(!Array.isArray(it.steps))it.steps=[];
@@ -831,20 +833,28 @@ function dashLists(){
     if(o.status==="生產中"&&o.custDelivery){var dd=daysSince(o.custDelivery);if(dd>=-lead)orderDue.push({c:c,o:o,late:dd});}
     if(!orderPaid(o)&&o.status!=="取消"&&(o.shipDate||o.status==="已出貨"||o.status==="結案")){unpaid.push({c:c,o:o,late:o.shipDate?daysSince(o.shipDate):0});}
   });});
+  // 推廣待跟進：有排下次跟進日、已到期，且還沒收尾（非無需求/成交）
+  var pitchFu=[];
+  (S.data.pitches||[]).forEach(function(p){
+    if(p.followUp&&p.followUp<=todayISO()&&p.status!=="無需求"&&p.status!=="成交"){pitchFu.push({p:p,late:daysSince(p.followUp)});}
+  });
   toChase.sort(function(a,b){return b.late-a.late;});
   holds.sort(function(a,b){return b.late-a.late;});
   deliveries.sort(function(a,b){return a.late-b.late;});
   orderDue.sort(function(a,b){return b.late-a.late;});
   unpaid.sort(function(a,b){return b.late-a.late;});
-  return {toChase:toChase,holds:holds,samples:samples,deliveries:deliveries,orderDue:orderDue,unpaid:unpaid};
+  pitchFu.sort(function(a,b){return b.late-a.late;});
+  return {toChase:toChase,holds:holds,samples:samples,deliveries:deliveries,orderDue:orderDue,unpaid:unpaid,pitchFu:pitchFu};
 }
 
 /* ===================== 導覽列 ===================== */
-var NAV=[["dashboard","中控台"],["todos","待辦"],["customers","客戶"],["orders","訂單"],["parts","料號申請"],["quotes","報價單"],["samples","寄樣"],["notes","小抄"]];
+var NAV=[["dashboard","中控台"],["todos","待辦"],["customers","客戶"],["orders","訂單"],["pitches","推廣"],["parts","料號申請"],["quotes","報價單"],["samples","寄樣"],["notes","小抄"]];
 var PART_STATUS=["申請中","已核發","取消"];
 var PART_STYLE={"申請中":"background:#FAF1DC;color:#8F681A","已核發":"background:#E6F4EB;color:#357B50","取消":"background:#F1F0EA;color:#7c7890"};
+var PITCH_STATUS=["待回覆","有興趣","無需求","已報價","成交"];
+var PITCH_STYLE={"待回覆":"background:#FAF1DC;color:#8F681A","有興趣":"background:#EEF0FB;color:#4A55BC","無需求":"background:#F1F0EA;color:#7c7890","已報價":"background:#E7F0F9;color:#2F6BA6","成交":"background:#E6F4EB;color:#357B50"};
 function renderNav(){
-  var d=dashLists();var n=d.toChase.length+d.holds.length+d.samples.length+d.deliveries.length+d.orderDue.length+d.unpaid.length;
+  var d=dashLists();var n=d.toChase.length+d.holds.length+d.samples.length+d.deliveries.length+d.orderDue.length+d.unpaid.length+(d.pitchFu?d.pitchFu.length:0);
   document.getElementById("nav").innerHTML=NAV.map(function(t){
     var badge=t[0]==="dashboard"&&n?'<span class="b">'+n+'</span>':"";
     return '<button class="navbtn'+(S.view===t[0]?" on":"")+'" data-action="nav" data-view="'+t[0]+'">'+t[1]+badge+'</button>';
@@ -872,6 +882,7 @@ function renderInner(){
   else if(v==="vendors")h=renderVendors();
   else if(v==="todos")h=renderTodos();
   else if(v==="parts")h=renderParts();
+  else if(v==="pitches")h=renderPitches();
   else if(v==="quotes")h=renderQuotes();
   else if(v==="weekly")h=renderWeekly();
   document.getElementById("view").innerHTML=h;
@@ -911,6 +922,17 @@ function renderDash(){
       reason:'<span class="rz" style="color:#C23A55">💰 '+amt+since+'</span>'};
   });
 
+  if(d.pitchFu&&d.pitchFu.length){
+    h+='<section style="margin-top:22px"><h3 class="sectitle" style="font-size:19px">📣 推廣待跟進 <span class="count">'+d.pitchFu.length+'</span></h3><p class="subt">你排了「下次跟進」日、時間到了，還沒收尾的推廣客戶</p>';
+    h+='<div class="dlist">'+d.pitchFu.map(function(x){var p=x.p;
+      var cnt=x.late>0?("過 "+x.late+" 天"):(x.late===0?"今天":("剩 "+(-x.late)+" 天"));
+      var pc=p.customer?getC(p.customer):null;var pcn=pc?pc.name:(p.customer||"（未綁客戶）");
+      return '<div class="drow" data-action="nav" data-view="pitches" role="button" tabindex="0"><span class="dbar" style="background:#B0713F"></span>'+
+        '<div class="dmain"><div class="dcust">'+esc(pcn)+'</div><div class="dsubj">'+esc(p.product||"（未填產品）")+(p.feedback?(' · '+esc(p.feedback.replace(/\n/g," ").slice(0,40))):"")+'</div></div>'+
+        '<div class="dreason"><span class="rz" style="color:#B0713F">📅 '+esc(p.followUp)+' · '+cnt+'</span></div>'+
+        '<div class="dreason" style="max-width:none;padding-left:8px"><span class="chip" style="'+(PITCH_STYLE[p.status]||"")+'">'+esc(p.status)+'</span></div></div>';
+    }).join("")+'</div></section>';
+  }
   h+='<section style="margin-top:30px"><h3 class="sectitle" style="font-size:16px;color:var(--muted)">參考資訊</h3>'+
     '<div class="pcard" style="max-width:360px;margin-top:10px"><div class="row" style="justify-content:space-between"><span style="font-weight:700">💱 匯率</span><button class="iconmini" data-action="edit-exchange">'+icon("pencil",15)+'</button></div>'+
     '<div class="exch">'+(S.data.exchange.text?autolink(S.data.exchange.text):'<span class="muted">點筆填入目前匯率</span>')+'</div>'+
@@ -1419,7 +1441,42 @@ function partRow(p){
     '</tr>';
 }
 function partByEl(el){return (S.data.partReqs||[]).filter(function(p){return p.id===el.getAttribute("data-prid");})[0];}
-function partByEl(el){return (S.data.partReqs||[]).filter(function(p){return p.id===el.getAttribute("data-prid");})[0];}
+
+/* ---------- 推廣 / 開發（推薦新產品給客戶） ---------- */
+function renderPitches(){
+  var all=S.data.pitches||[];
+  var list=all.filter(function(p){return S.filter==="all"||p.status===S.filter;});
+  var h='<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h2 class="sectitle">📣 推廣 / 開發 <span class="count">'+list.length+'</span></h2>'+
+    '<p class="subt">推薦新產品給客戶的紀錄：哪一天、推了什麼、客戶怎麼回。設「下次跟進」就會提醒你回頭追。</p></div>'+
+    '<button class="btn-dark" data-action="add-pitch" style="flex:none">'+icon("plus",16)+' 新增推廣</button></div>';
+  var tabs=[["all","全部",all.length]];
+  PITCH_STATUS.forEach(function(s){tabs.push([s,s,all.filter(function(p){return p.status===s;}).length]);});
+  h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="pitchfilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
+  if(!list.length)return h+'<div class="empty"><div class="big">📣</div><p>'+(all.length?"這個結果下沒有紀錄。":"還沒有推廣紀錄。推薦新產品給客戶後，點「新增推廣」記一筆。")+'</p></div>';
+  var sorted=list.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  h+='<div class="ptwrap"><table class="ptable"><colgroup><col style="width:112px"><col style="width:150px"><col><col><col style="width:112px"><col style="width:88px"><col style="width:28px"></colgroup>'+
+    '<thead><tr><th>推薦日期</th><th>客戶</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>結果</th><th></th></tr></thead><tbody>'+
+    sorted.map(pitchRow).join("")+'</tbody></table></div>';
+  return h;
+}
+function pitchRow(p){
+  var da='data-piid="'+p.id+'"';
+  var stSel='<select class="statussel sm" data-action="set-pitch-status" data-piid="'+p.id+'" style="'+PITCH_STYLE[p.status]+';font-size:11px;padding:3px 20px 3px 8px">'+
+    PITCH_STATUS.map(function(s){return '<option'+(s===p.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
+  var custSel='<select class="oin" '+da+' data-ptf="customer" style="color:#4A55BC"><option value="">— 未綁 —</option>'+
+    S.data.customers.map(function(c){return '<option value="'+c.id+'"'+(p.customer===c.id?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>';
+  var fuWarn=(p.followUp&&p.status!=="無需求"&&p.status!=="成交"&&p.followUp<=todayISO())?' style="border-color:#F2D7DD;background:#FBE9ED"':'';
+  return '<tr>'+
+    '<td><input class="oin" type="date" '+da+' data-ptf="date" value="'+esc(p.date)+'"></td>'+
+    '<td>'+custSel+'</td>'+
+    '<td><input class="oin" '+da+' data-ptf="product" value="'+esc(p.product)+'" placeholder="磁鐵支架、平板架…" style="font-weight:600"></td>'+
+    '<td><textarea class="oin ptnote" '+da+' data-ptf="feedback" rows="1" placeholder="例：9/27 聯繫過，目前沒有支架需求">'+esc(p.feedback)+'</textarea></td>'+
+    '<td><input class="oin" type="date" '+da+' data-ptf="followUp" value="'+esc(p.followUp)+'"'+fuWarn+'></td>'+
+    '<td>'+stSel+'</td>'+
+    '<td><button class="iconmini del" data-action="del-pitch" data-piid="'+p.id+'">'+icon("x",12)+'</button></td>'+
+    '</tr>';
+}
+function pitchByEl(el){return (S.data.pitches||[]).filter(function(p){return p.id===el.getAttribute("data-piid");})[0];}
 
 /* ---------- 小抄 ---------- */
 function renderNotes(){
@@ -2269,6 +2326,9 @@ document.addEventListener("click",function(e){
   if(a==="add-part"){if(!Array.isArray(S.data.partReqs))S.data.partReqs=[];var npr={id:uid(),createdAt:todayISO(),date:todayISO(),subject:"",status:"申請中",customer:"",note:""};S.data.partReqs.unshift(npr);save();render();var fe=document.querySelector('.oin[data-prid="'+npr.id+'"][data-pf="subject"]');if(fe){fe.focus();fe.scrollIntoView({block:"center",behavior:"smooth"});}return;}
   if(a==="del-part"){var parr=S.data.partReqs,ppp=parr.filter(function(x){return x.id===t.getAttribute("data-prid");})[0],pidx=parr.indexOf(ppp);softDelete("已刪除一筆料號申請",function(){parr.splice(pidx,1);},function(){parr.splice(Math.min(pidx,parr.length),0,ppp);});return;}
   if(a==="pfilter"){S.filter=t.getAttribute("data-f");render();return;}
+  if(a==="add-pitch"){if(!Array.isArray(S.data.pitches))S.data.pitches=[];var npi={id:uid(),createdAt:todayISO(),date:todayISO(),customer:"",product:"",feedback:"",followUp:"",status:"待回覆"};S.data.pitches.unshift(npi);save();render();var pfe=document.querySelector('.oin[data-piid="'+npi.id+'"][data-ptf="product"]');if(pfe){pfe.focus();pfe.scrollIntoView({block:"center",behavior:"smooth"});}return;}
+  if(a==="del-pitch"){var piarr=S.data.pitches,pio=piarr.filter(function(x){return x.id===t.getAttribute("data-piid");})[0],piidx=piarr.indexOf(pio);softDelete("已刪除一筆推廣紀錄",function(){piarr.splice(piidx,1);},function(){piarr.splice(Math.min(piidx,piarr.length),0,pio);});return;}
+  if(a==="pitchfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="import-quote"){S.modal={type:"importq",draft:{}};renderModal();return;}
   if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
   if(a==="add-sopt"){var sv=document.getElementById("sopt_new").value.trim();if(sv){S.data.settings.orderSop.push(sv);save();renderModal();}return;}
@@ -2437,6 +2497,10 @@ document.addEventListener("change",function(e){
   if(pss){var pso=(S.data.partReqs||[]).filter(function(x){return x.id===pss.getAttribute("data-prid");})[0];if(pso){pso.status=pss.value;save();render();}return;}
   var pfc=e.target.closest("[data-pf]");
   if(pfc){var pfco=partByEl(pfc);if(pfco){pfco[pfc.getAttribute("data-pf")]=pfc.value;save();if(pfc.type==="date"||pfc.tagName==="SELECT")render();}return;}
+  var piss=e.target.closest("[data-action='set-pitch-status']");
+  if(piss){var pisso=(S.data.pitches||[]).filter(function(x){return x.id===piss.getAttribute("data-piid");})[0];if(pisso){pisso.status=piss.value;save();render();}return;}
+  var ptfc=e.target.closest("[data-ptf]");
+  if(ptfc){var ptfco=pitchByEl(ptfc);if(ptfco){ptfco[ptfc.getAttribute("data-ptf")]=ptfc.value;save();if(ptfc.type==="date"||ptfc.tagName==="SELECT")render();}return;}
   var tbs=e.target.closest("select[data-todobind]");
   if(tbs){var bit=null;S.data.todoWeeks.forEach(function(w){(w.items||[]).forEach(function(i){if(i.id===tbs.getAttribute("data-todobind"))bit=i;});});if(bit){bit.cust=tbs.value||null;}S.bindTodo=null;save();render();return;}
   var tst=e.target.closest("[data-action='set-thread-stage']");
@@ -2527,6 +2591,8 @@ document.addEventListener("input",function(e){
   if(pyfld){var pyo=orderByEl(pyfld);if(pyo){var pyp=(pyo.payments||[]).filter(function(x){return x.id===pyfld.getAttribute("data-pyid");})[0];if(pyp){pyp[pyfld.getAttribute("data-payf")]=pyfld.value;save();updateOrderPayDom(pyo);}}return;}
   var pfld=e.target.closest("[data-pf]");
   if(pfld){var ppo=partByEl(pfld);if(ppo){ppo[pfld.getAttribute("data-pf")]=pfld.value;save();}return;}
+  var ptfld=e.target.closest("[data-ptf]");
+  if(ptfld){var pto=pitchByEl(ptfld);if(pto){pto[ptfld.getAttribute("data-ptf")]=ptfld.value;save();}return;}
   var qt=e.target.closest("[data-qtitle]");
   if(qt){var qtd=QD(qt.getAttribute("data-qtitle"));if(qtd){qtd.title=qt.value;save();}return;}
   var qf=e.target.closest("[data-qf]");
