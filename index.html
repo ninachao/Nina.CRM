@@ -780,7 +780,7 @@ function normalize(d){
 }
 
 /* ===================== 狀態 ===================== */
-var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null};
+var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:""};
 
 function load(){try{var r=localStorage.getItem(KEY);if(r){S.data=normalize(JSON.parse(r));return;}}catch(e){}S.data=normalize(seed());save();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S.data));var s=document.getElementById("saved");s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1100);}catch(e){console.error(e);}}
@@ -1273,23 +1273,62 @@ function renderSamples(){
 /* ---------- 訂單總覽 ---------- */
 function renderOrders(){
   var rows=[];S.data.customers.forEach(function(c){(c.orders||[]).forEach(function(o){rows.push({c:c,o:o});});});
-  var list=rows.filter(function(r){return S.filter==="all"||r.o.status===S.filter;});
+  // 有訂單的客戶清單（給下拉篩選用）
+  var custOpts=[],comap={};
+  rows.forEach(function(r){if(!comap[r.c.id]){comap[r.c.id]={c:r.c,n:0};custOpts.push(comap[r.c.id]);}comap[r.c.id].n++;});
+  custOpts.sort(function(a,b){return a.c.name.localeCompare(b.c.name,"zh-Hant");});
+  if(S.ocust&&!comap[S.ocust])S.ocust="";
+  var base=rows.filter(function(r){return !S.ocust||r.c.id===S.ocust;});
+  var list=base.filter(function(r){return S.filter==="all"||r.o.status===S.filter;});
   var allOids=list.map(function(r){return r.o.id;});
   var anyOpen=allOids.some(function(x){return !S.orderCollapse[x];});
   var h='<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h2 class="sectitle">訂單 <span class="count">'+list.length+'</span></h2>'+
-    '<p class="subt">所有客戶的訂單集中在這，總金額＝各品項 數量×單價 加總。新增請到客戶頁按「新增訂單」；這裡可直接改狀態、勾 SOP。單子多可用右邊按鈕收合。</p></div>'+
+    '<p class="subt">依客戶分組，同一個客戶的訂單集中列在一起（新的在上）。要只看某一家，用下面的「客戶」下拉選。新增請到客戶頁按「新增訂單」。</p></div>'+
     '<div class="row" style="gap:8px;flex:none">'+(allOids.length?'<button class="btn-soft" data-action="collapse-orders" data-oids="'+allOids.join(",")+'" style="padding:7px 12px">'+(anyOpen?"⊟ 收合全部":"⊞ 展開全部")+'</button>':"")+
     '<button class="btn-soft" data-action="ostatus-mgr" style="padding:7px 12px">⚙ 狀態</button>'+
     '<button class="btn-soft" data-action="sop-template" style="padding:7px 14px">⚙ SOP 範本</button></div></div>';
-  var tabs=[["all","全部",rows.length]];
-  orderStatuses().forEach(function(s){tabs.push([s,s,rows.filter(function(r){return r.o.status===s;}).length]);});
+  var tabs=[["all","全部",base.length]];
+  orderStatuses().forEach(function(s){tabs.push([s,s,base.filter(function(r){return r.o.status===s;}).length]);});
   h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="ofilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
-  if(!list.length)return h+'<div class="empty"><div class="big">🧾</div><p>'+(rows.length?"這個狀態下沒有訂單。":"還沒有訂單。到客戶頁按「新增訂單」記第一筆。")+'</p></div>';
+  h+='<div class="row" style="margin:-6px 0 12px;gap:8px;align-items:center;flex-wrap:wrap">'+
+    '<span style="font-size:12.5px;color:var(--muted);font-weight:700">客戶</span>'+
+    '<select class="inp" data-action="ocustfilter" style="width:auto;max-width:300px;margin:0;padding:6px 12px;font-size:13px">'+
+    '<option value="">全部客戶（'+rows.length+' 筆）</option>'+
+    custOpts.map(function(x){return '<option value="'+x.c.id+'"'+(S.ocust===x.c.id?" selected":"")+'>'+esc(x.c.name)+'（'+x.n+' 筆）</option>';}).join("")+
+    '</select>'+
+    (S.ocust?'<button class="btn-soft" data-action="ocust-clear" style="padding:6px 12px;font-size:12.5px">✕ 看全部客戶</button>':"")+'</div>';
+  if(!list.length)return h+'<div class="empty"><div class="big">🧾</div><p>'+(rows.length?"這個條件下沒有訂單。":"還沒有訂單。到客戶頁按「新增訂單」記第一筆。")+'</p></div>';
   var by={};list.forEach(function(r){var cur=r.o.currency||"USD";by[cur]=(by[cur]||0)+orderAmount(r.o);});
   var tot=revenueText(by);
-  if(tot)h+='<div class="row" style="margin:-4px 0 12px"><span class="revchip">'+icon("dollar",12)+(S.filter==="all"?"全部合計 ":"此狀態合計 ")+tot+'</span></div>';
-  h+=ordersList(list,true);
+  if(tot)h+='<div class="row" style="margin:-4px 0 12px"><span class="revchip">'+icon("dollar",12)+(S.ocust?"此客戶合計 ":(S.filter==="all"?"全部合計 ":"此狀態合計 "))+tot+'</span></div>';
+  h+=ordersGrouped(list);
   return h;
+}
+/* 依客戶分組的訂單列表：同客戶的單集中在一起 */
+function ordersGrouped(rows){
+  var groups=[],gmap={};
+  rows.forEach(function(r){
+    if(!gmap[r.c.id]){gmap[r.c.id]={c:r.c,list:[]};groups.push(gmap[r.c.id]);}
+    gmap[r.c.id].list.push(r);
+  });
+  groups.forEach(function(g){
+    g.list.sort(function(a,b){return (b.o.od||"").localeCompare(a.o.od||"");});
+    g.latest=((g.list[0]||{}).o||{}).od||"";
+  });
+  groups.sort(function(a,b){return (b.latest||"").localeCompare(a.latest||"");});
+  return groups.map(function(g){
+    var by={};g.list.forEach(function(r){var cur=r.o.currency||"USD";by[cur]=(by[cur]||0)+orderAmount(r.o);});
+    var tot=revenueText(by);
+    var unpaidN=g.list.filter(function(r){return !orderPaid(r.o)&&r.o.status!=="取消"&&orderOutstanding(r.o)>0.01;}).length;
+    var head='<div class="qghead"><span class="qgdot"></span>'+
+      '<a class="qgname" href="#" data-action="open" data-id="'+g.c.id+'" title="打開客戶頁">'+esc(g.c.name)+'</a>'+
+      '<span class="count">'+g.list.length+' 筆</span>'+
+      (tot?'<span class="revchip">'+icon("dollar",11)+tot+'</span>':"")+
+      (unpaidN?'<span class="flag">待收款 '+unpaidN+'</span>':"")+
+      (S.ocust?"":'<button class="btn-soft qgnew" data-action="ocust-only" data-cid="'+g.c.id+'" style="padding:5px 11px">只看這客戶</button>')+
+      '</div>';
+    return '<div class="qgroupsec">'+head+'<div class="olist">'+g.list.map(function(r){return orderCard(r.c,r.o,false);}).join("")+'</div></div>';
+  }).join("");
 }
 /* rows: [{c,o}]；withCust=true 時顯示客戶名（總覽用） */
 function ordersList(rows,withCust){
@@ -2266,12 +2305,14 @@ document.addEventListener("click",function(e){
 
   if(a==="overlay"){return;}
   if(a==="close-modal"){S.modal=null;renderModal();return;}
-  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";S.newOrderId=null;S.bindTodo=null;S.quoteId=null;render();window.scrollTo(0,0);return;}
+  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";S.newOrderId=null;S.bindTodo=null;S.quoteId=null;S.ocust="";render();window.scrollTo(0,0);return;}
   if(a==="open"){e.preventDefault();S.selectedId=id;S.view="detail";S.newOrderId=null;render();window.scrollTo(0,0);return;}
   if(a==="cfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="nfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="sfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="ofilter"){S.filter=t.getAttribute("data-f");render();return;}
+  if(a==="ocust-only"){S.ocust=t.getAttribute("data-cid")||"";render();window.scrollTo(0,0);return;}
+  if(a==="ocust-clear"){S.ocust="";render();return;}
   if(a==="new-quote"){var nq=newQuoteDoc();S.data.quoteDocs.unshift(nq);S.quoteId=nq.id;save();render();return;}
   if(a==="new-quote-for"){var nqc=getC(t.getAttribute("data-cid"));var nq2=newQuoteDoc(nqc);S.data.quoteDocs.unshift(nq2);S.quoteId=nq2.id;S.view="quotes";save();render();window.scrollTo(0,0);return;}
   if(a==="open-quote"){if(e.target.closest("[data-action='dup-quote'],[data-action='del-quote-doc'],[data-qtitle]"))return;S.quoteId=t.getAttribute("data-qdid");S.view="quotes";render();window.scrollTo(0,0);return;}
@@ -2517,6 +2558,8 @@ document.addEventListener("change",function(e){
     if(v==="__hold__"){S.modal={type:"hold",customerId:S.selectedId,projectId:pid,draft:{}};render();renderModal();return;}
     if(v==="__archive__"){p.archived=true;p.archivedAt=todayISO();p.hold=null;touch(p);save();render();showToast('已結案「'+(p.customerSubject||"")+'」',function(){p.archived=false;});return;}
     p.stage=v;p.hold=null;p.archived=false;touch(p);save();render();return;}
+  var ocf=e.target.closest("[data-action='ocustfilter']");
+  if(ocf){S.ocust=ocf.value;render();return;}
   var oss=e.target.closest("[data-action='set-order-status']");
   if(oss){var occ=getC(oss.getAttribute("data-cid"));var oo2=occ&&(occ.orders||[]).filter(function(o){return o.id===oss.getAttribute("data-oid");})[0];
     if(oo2){oo2.status=oss.value;if(oss.value==="已出貨"&&!oo2.shipDate)oo2.shipDate=todayISO();if((oss.value==="已收款"||oss.value==="結案")&&!orderPaid(oo2))markOrderFullPaid(oo2);save();render();}return;}
