@@ -1046,6 +1046,18 @@ function renderDetail(){
   if(notesForCust.length)h+='<div class="block"><div class="lbl">這個客戶的小抄</div><div class="grid" style="grid-template-columns:1fr;gap:10px;margin-top:6px">'+notesForCust.map(noteCard).join("")+'</div></div>';
   h+='</div>';
 
+  var myPitches=(S.data.pitches||[]).filter(function(p){return p.customer===c.id;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  var lastPitch=myPitches[0];
+  h+='<div class="panel" style="margin-bottom:22px;padding:14px 20px"><div class="row" style="justify-content:space-between;align-items:center"><b>📣 推廣紀錄 <span class="count">'+myPitches.length+'</span></b>'+
+     (lastPitch?'<span class="muted" style="font-size:12px">最近一次：'+esc(lastPitch.date)+(lastPitch.product?(' · '+esc(lastPitch.product)):"")+'</span>':"")+
+     '<button class="btn-soft" data-action="add-pitch" data-cid="'+c.id+'" style="padding:6px 12px;flex:none">＋ 新增推廣</button></div>';
+  if(myPitches.length){
+    h+='<div class="ptwrap" style="margin-top:10px"><table class="ptable"><colgroup><col style="width:118px"><col style="width:140px"><col style="width:180px"><col><col style="width:118px"><col style="width:88px"><col style="width:28px"></colgroup>'+
+      '<thead><tr><th>推薦日期</th><th>郵件主旨</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>結果</th><th></th></tr></thead><tbody>'+
+      myPitches.map(function(p){return pitchRow(p,true);}).join("")+'</tbody></table></div>';
+  }else h+='<p class="muted" style="font-size:13px;margin:8px 0 0">還沒有推廣紀錄，推薦新產品給這位客戶後點「新增推廣」記一筆。</p>';
+  h+='</div>';
+
   var myDocs=S.data.quoteDocs.filter(function(q){return q.customerId===c.id;});
   h+='<div class="panel" style="margin-bottom:22px;padding:14px 20px"><div class="row" style="justify-content:space-between;align-items:center"><b>📄 報價單 <span class="count">'+myDocs.length+'</span></b>'+
      '<button class="btn-soft" data-action="new-quote-for" data-cid="'+c.id+'" style="padding:6px 12px">＋ 開報價單</button></div>';
@@ -1533,7 +1545,7 @@ function renderPitches(){
   }).join("");
   return h;
 }
-function pitchRow(p){
+function pitchRow(p,hideCust){
   var da='data-piid="'+p.id+'"';
   var stSel='<select class="statussel sm" data-action="set-pitch-status" data-piid="'+p.id+'" style="'+PITCH_STYLE[p.status]+';font-size:11px;padding:3px 20px 3px 8px">'+
     PITCH_STATUS.map(function(s){return '<option'+(s===p.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
@@ -1548,7 +1560,7 @@ function pitchRow(p){
     '<td><textarea class="oin ptnote" '+da+' data-ptf="feedback" rows="1" placeholder="例：9/27 聯繫過，目前沒有支架需求">'+esc(p.feedback)+'</textarea></td>'+
     '<td><input class="oin" type="date" '+da+' data-ptf="followUp" value="'+esc(p.followUp)+'"'+fuWarn+'></td>'+
     '<td>'+stSel+'</td>'+
-    '<td>'+custSel+'</td>'+
+    (hideCust?"":'<td>'+custSel+'</td>')+
     '<td><button class="iconmini del" data-action="del-pitch" data-piid="'+p.id+'">'+icon("x",12)+'</button></td>'+
     '</tr>';
 }
