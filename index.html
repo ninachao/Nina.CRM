@@ -450,6 +450,10 @@ body.colresizing .oin{pointer-events:none}
 .ochev:hover{background:#f1eee6;color:var(--ink)}
 .ochev.open{transform:rotate(90deg)}
 .ocard.ocollapsed{padding:10px 14px}
+.ocard.ocollapsed .ohead{flex-wrap:nowrap;gap:6px}
+.ocard.ocollapsed .ohead>input[data-of="po"]{flex:0 0 116px!important}
+.ocard.ocollapsed .ohead>input[data-of="csNo"]{flex:0 0 198px!important}
+.ocard.ocollapsed .statussel{flex:0 0 auto;width:78px}
 .ocard.ocollapsed .obody{display:none}
 .osum{font-size:12px;color:#8b8699;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .ocard:not(.ocollapsed) .ocollap-only{display:none}
@@ -471,8 +475,19 @@ body.colresizing .oin{pointer-events:none}
 .ocard{position:relative;overflow:hidden}
 .ocard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--oacc,#C9CBD2)}
 .ocard{padding-left:19px!important}
-.osum{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px;color:#8b8699;flex:1;min-width:0;overflow:visible;white-space:normal}
-.ofact{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:11.5px;font-weight:600;color:#55586A;white-space:nowrap}
+/* 收合列：固定欄寬的格線，每張訂單的欄位都對齊在同一個 x 位置 */
+.osum{display:grid;grid-template-columns:55px 178px 71px;gap:5px;align-items:center;flex:0 0 314px;min-width:0;font-size:12px;color:#8b8699}
+.ocell{min-width:0;display:flex;align-items:center}
+.opay{flex:0 0 122px;display:flex;justify-content:flex-end;min-width:0;overflow:hidden}
+.opay>*{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ohead .amt{min-width:98px;justify-content:flex-end}
+@media(max-width:1120px){
+  .osum{display:flex;flex-wrap:wrap;gap:5px;flex:1 1 auto}
+  .ocard.ocollapsed .ohead{flex-wrap:wrap}
+  .ocell:empty{display:none}
+  .opay{min-width:0}
+}
+.ofact{display:inline-flex;align-items:center;gap:4px;max-width:100%;background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:11.5px;font-weight:600;color:#55586A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ofact b{font-variant-numeric:tabular-nums;color:var(--ink)}
 .ofact.due{background:#FAF1DC;border-color:#EEDFB4;color:#8F681A}
 .ofact.late{background:#FBE9ED;border-color:#F2D7DD;color:#C23A55}
@@ -1470,32 +1485,37 @@ function orderCard(c,o,withCust){
   var stSel='<select class="statussel sm" data-action="set-order-status" data-cid="'+c.id+'" data-oid="'+o.id+'" style="'+orderStyle(o.status)+'">'+
     stOpts.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>';}).join("")+'</select>';
   var fp=orderPaid(o),rec=orderReceived(o),amt=orderAmount(o),outst=orderOutstanding(o),ocur=o.currency||"USD",hasInst=(o.payments&&o.payments.length>0);
-  var payLabel=fp?('💰 已收訖'+((rec&&Math.abs(rec-amt)>0.01)?('（實收 '+fmtMoney(rec)+'）'):'')):(rec>0?('💰 已收 '+fmtMoney(rec)+' · 待收 '+fmtMoney(outst)):('💰 待收 '+ocur+' '+fmtMoney(amt)));
+  var payLabel=fp?'💰 已收訖':('💰 待收 '+fmtMoney(outst>0?outst:amt));
+  var payTitle=fp?('已收訖'+((rec&&Math.abs(rec-amt)>0.01)?('（實收 '+ocur+' '+fmtMoney(rec)+'）'):'')) 
+    :(rec>0?('已收 '+ocur+' '+fmtMoney(rec)+'，待收 '+fmtMoney(outst)):('待收 '+ocur+' '+fmtMoney(amt)));
   var payCls='paychip'+(fp?' on':(rec>0?' part':''));
-  var payBtn=hasInst?('<span class="'+payCls+'" id="paychip-'+o.id+'" title="收款明細在卡片下方">'+payLabel+'</span>')
-    :('<button class="'+payCls+'" id="paychip-'+o.id+'" data-action="toggle-paid" data-cid="'+c.id+'" data-oid="'+o.id+'" title="'+(fp?"已收訖，點一下改回待收":"點一下標記全額收訖；分期請用下方明細")+'">'+payLabel+'</button>');
+  var payBtn=hasInst?('<span class="'+payCls+'" id="paychip-'+o.id+'" title="'+esc(payTitle)+'（收款明細在卡片下方）">'+payLabel+'</span>')
+    :('<button class="'+payCls+'" id="paychip-'+o.id+'" data-action="toggle-paid" data-cid="'+c.id+'" data-oid="'+o.id+'" title="'+esc(payTitle)+(fp?"，點一下改回待收":"，點一下標記全額收訖；分期請用下方明細")+'">'+payLabel+'</button>');
   var curSel='<select class="oin" '+da+' data-of="currency" style="width:auto;font-weight:700;color:#357B50;padding:2px 4px">'+
     ORDER_CURRENCIES.map(function(x){return '<option'+((o.currency||"USD")===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
   var collapsed=!!S.orderCollapse[o.id];
   var sopA=o.sop||[];var sopDn=sopA.filter(function(s){return s.done;}).length;
-  var sumBits=[];
-  if(its.length)sumBits.push('<span class="ofact">品項 <b>'+its.length+'</b></span>');
+  // 收合列＝固定四欄（品項 / 交期 / 出貨 / SOP），沒資料的欄位留白，
+  // 這樣每張訂單的欄位都在同一個位置，不會因為標籤多寡而錯開換行。
+  var shipped=!!(o.shipDate&&String(o.shipDate).trim());
+  var cellItems=its.length?('<span class="ofact">品項 <b>'+its.length+'</b></span>'):"";
+  var cellDue="";
   if(o.custDelivery){
-    var ddz=daysSince(o.custDelivery),shipped=!!(o.shipDate&&String(o.shipDate).trim());
+    var ddz=daysSince(o.custDelivery);
     var cls=shipped?"ok":(ddz>0?"late":(ddz>=-(S.data.settings.leadDays||14)?"due":""));
     var tail=shipped?"":(ddz>0?(" · 過 "+ddz+" 天"):(ddz===0?" · 今天":(" · 剩 "+(-ddz)+" 天")));
-    sumBits.push('<span class="ofact '+cls+'">'+icon("truck",11)+'交期 <b>'+esc(o.custDelivery)+'</b>'+tail+'</span>');
+    cellDue='<span class="ofact '+cls+'">'+icon("truck",11)+'<b>'+esc(o.custDelivery)+'</b>'+tail+'</span>';
   }
-  if(o.shipDate)sumBits.push('<span class="ofact ok">📦 已出 <b>'+esc(o.shipDate)+'</b></span>');
-  if(o.factory)sumBits.push('<span class="ofact">'+icon("factory",11)+esc(o.factory)+'</span>');
-  if(sopA.length)sumBits.push('<span class="ofact'+(sopDn===sopA.length?' ok':'')+'">SOP <b>'+sopDn+'/'+sopA.length+'</b></span>');
+  if(shipped)cellDue='<span class="ofact ok" title="'+(o.custDelivery?('交期(客) '+esc(o.custDelivery)):'')+'">📦 已出 <b>'+esc(o.shipDate)+'</b></span>';
+  var cellSop=sopA.length?('<span class="ofact'+(sopDn===sopA.length?' ok':'')+'">SOP <b>'+sopDn+'/'+sopA.length+'</b></span>'):"";
+  var sumBits=[cellItems,cellDue,cellSop].map(function(x){return '<span class="ocell">'+x+'</span>';});
   var h='<div class="ocard'+(o.id===S.newOrderId?' onew':'')+(collapsed?' ocollapsed':'')+'" style="--oacc:'+orderAccent(o.status)+'">';
   h+='<div class="ohead"><button class="ochev'+(collapsed?'':' open')+'" data-action="toggle-ocard" data-oid="'+o.id+'" title="收合/展開">'+icon("chev",15)+'</button>'+stSel+
     (withCust?'<a href="#" data-action="open" data-id="'+c.id+'" style="font-weight:700;flex:none">'+esc(c.name)+'</a>':"")+
     '<input class="oin" '+da+' data-of="po" value="'+esc(o.po)+'" placeholder="PO#" style="flex:0 1 150px;font-weight:700">'+
     '<input class="oin" '+da+' data-of="csNo" value="'+esc(o.csNo)+'" placeholder="訂單單號" style="flex:0 1 160px;font-size:12px;color:#6b6680">'+
     '<span class="osum ocollap-only">'+sumBits.join('')+'</span>'+
-    payBtn+
+    '<span class="opay">'+payBtn+'</span>'+
     '<span class="amt" style="display:inline-flex;align-items:center;gap:3px">'+curSel+'<b id="oamt-'+o.id+'">'+fmtMoney(orderAmount(o))+'</b></span>'+
     '<div class="row" style="gap:0;flex:none;flex-wrap:nowrap">'+
     '<button class="iconmini" data-action="copy-order" data-cid="'+c.id+'" data-oid="'+o.id+'" title="複製為新訂單（保留客戶、料號與單價）">'+icon("copy",14)+'</button>'+
