@@ -387,8 +387,8 @@ body.colresizing .oin{pointer-events:none}
 .oin::placeholder{color:#c3bcac}
 .oin::-webkit-calendar-picker-indicator{opacity:.4}
 .ometa{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:4px 10px;margin-top:9px}
-.ometa label{display:flex;flex-direction:column;gap:0;font-size:11px;color:var(--muted)}
-.ometa label .oin{font-size:12.5px;color:var(--ink);margin-top:1px}
+.ometa label{display:block;font-size:11px;color:var(--muted);line-height:1.5}
+.ometa label .oin{font-size:12.5px;color:var(--ink);margin-top:1px;display:block;width:100%}
 .oitems input.oin{font-size:12.5px;padding:2px 6px}
 .oitems td{vertical-align:middle}
 .oitems .oremark{font-size:12.5px;padding:2px 6px;resize:vertical;min-height:24px;line-height:1.45;white-space:pre-wrap;font-family:inherit;display:block;field-sizing:content}
@@ -456,6 +456,31 @@ body.colresizing .oin{pointer-events:none}
 .revchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--grl);color:#357B50}
 .lastprice{display:block;margin-top:2px;font-size:10.5px;font-weight:700;color:#8F681A;background:#FAF1DC;border:1px solid #EEDFB4;border-radius:6px;padding:1px 6px;line-height:1.5;white-space:nowrap;cursor:pointer}
 .lastprice:hover{background:#F5E5C4;color:#6E4F12}
+
+/* 貼上訂單 */
+.pasteHint{background:#FAF1DC;border:1px solid #EEDFB4;color:#6E4F12;border-radius:11px;padding:10px 13px;font-size:13px;line-height:1.65}
+.pasteOk{background:#E6F4EB;border:1px solid #C6E4D2;color:#2C6B45;border-radius:11px;padding:10px 13px;font-size:13px}
+.pasteWarn{background:#FBE9ED;border:1px solid #F2D7DD;color:#A32E47;border-radius:11px;padding:10px 13px;font-size:13px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:7px 12px}
+.pkv{display:flex;flex-direction:column;gap:1px;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.pkv span{font-size:10.5px;color:var(--muted);font-weight:700}
+.pkv b{font-size:13px;font-family:monospace;word-break:break-all}
+.pnote{font-size:13px;white-space:pre-wrap;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-top:5px}
+
+/* 訂單卡片：靠左色條標出狀態，收合時一眼看到重點 */
+.ocard{position:relative;overflow:hidden}
+.ocard:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--oacc,#C9CBD2)}
+.ocard{padding-left:19px!important}
+.osum{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px;color:#8b8699;flex:1;min-width:0;overflow:visible;white-space:normal}
+.ofact{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:11.5px;font-weight:600;color:#55586A;white-space:nowrap}
+.ofact b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.ofact.due{background:#FAF1DC;border-color:#EEDFB4;color:#8F681A}
+.ofact.late{background:#FBE9ED;border-color:#F2D7DD;color:#C23A55}
+.ofact.ok{background:#E6F4EB;border-color:#C6E4D2;color:#357B50}
+.oitems tbody tr:nth-child(even) td{background:rgba(255,255,255,.42)}
+.oitems th{letter-spacing:.02em;text-transform:none}
+.oitems td:nth-child(2) .oin,.oitems td:nth-child(3) .oin{text-align:right}
+.oitems td:nth-child(4){text-align:right;color:#357B50}
 /* ===== 報價單 ===== */
 .qitem{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;background:rgba(255,255,255,.55)}
 .qform .two,.qform .three{margin-top:8px}
@@ -585,6 +610,7 @@ var DEFAULT_ORDER_STATUS=["生產中","已出貨","已收款","結案"];
 var ORDER_STYLE={"生產中":"background:#EEF0FB;color:#4A55BC","已出貨":"background:#E7F0F9;color:#2F6BA6","已收款":"background:#E6F4EB;color:#357B50","結案":"background:#F1F0EA;color:#7c7890"};
 var STATUS_PALETTE=["background:#EEF0FB;color:#4A55BC","background:#E7F0F9;color:#2F6BA6","background:#E6F4EB;color:#357B50","background:#FAF1DC;color:#8F681A","background:#F9E0E5;color:#C23A55","background:#EDE9F7;color:#6B4FBB","background:#F1F0EA;color:#7c7890"];
 function orderStatuses(){return (S.data&&S.data.settings&&S.data.settings.orderStatuses)||DEFAULT_ORDER_STATUS;}
+function orderAccent(s){var st=orderStyle(s);var m=st.match(/color:(#[0-9A-Fa-f]{3,6})/);return m?m[1]:"#C9CBD2";}
 function orderStyle(s){if(ORDER_STYLE[s])return ORDER_STYLE[s];var i=orderStatuses().indexOf(s);return i<0?"background:#F1F0EA;color:#7c7890":STATUS_PALETTE[i%STATUS_PALETTE.length];}
 var ORDER_CURRENCIES=["USD","CNY","VND","TWD"];
 function num(v){var n=parseFloat(String(v==null?"":v).replace(/,/g,""));return isFinite(n)?n:0;}
@@ -614,6 +640,52 @@ function orderMatches(c,o,q){
   var bits=[c.name,o.po,o.csNo,o.cpNo,o.pcNo,o.arNo,o.noticeNo,o.invNo,o.shipNo,o.factory,o.note,o.payTerms];
   orderItems(o).forEach(function(it){bits.push(it.pn,it.desc,it.remark);});
   return bits.join(" ").toLowerCase().indexOf(q)>=0;
+}
+/* ── 貼上訂單確認信 → 自動解析 ── */
+function normImportDate(s){var m=String(s||"").match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);return m?(m[1]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[3]).slice(-2)):"";}
+/* 抓標籤後面同一行的值，遇到全形/半形逗號就停 */
+function grabAfter(text,labelRe){
+  var m=text.match(new RegExp("(?:"+labelRe+")\\s*[:：#]*\\s*([^\\n，,]+)"));
+  return (m&&m[1]!=null)?m[1].trim():"";
+}
+function findCustomerByName(name){
+  if(!name)return null;
+  var n=name.trim().toUpperCase();if(!n)return null;
+  var list=S.data.customers;
+  var exact=list.filter(function(c){return (c.name||"").trim().toUpperCase()===n;})[0];
+  if(exact)return exact;
+  // 退一步：客戶名包含貼上的字串（例如「GPS（UA 系列）」對上「GPS」）
+  return list.filter(function(c){var cn=(c.name||"").toUpperCase();return cn.indexOf(n)>=0||n.indexOf(cn)>=0;})[0]||null;
+}
+function parseOrderEmail(text){
+  var r={custName:"",csNo:"",cpNo:"",pcNo:"",po:"",custDelivery:"",factoryDelivery:"",note:"",items:[]};
+  r.custName=grabAfter(text,"客[戶户]");
+  r.csNo=grabAfter(text,"訂單單號|订单单号");
+  r.cpNo=grabAfter(text,"請購單號|请购单号");
+  r.pcNo=grabAfter(text,"採購單[號号]?|采购单[号]?");
+  var poM=text.match(/(?:客人\s*)?PO\s*#\s*[:：]?\s*([A-Za-z0-9\-\/]+)/i);
+  if(poM)r.po=poM[1].trim();
+  // 交期：前面有「客」或什麼都沒有＝客戶交期；掛工廠名的（例：星河交期）＝工廠交期
+  text.split(/\n/).forEach(function(line){
+    var m=line.match(/([^\n：:]{0,8})交期\s*[:：]?\s*([^\n，,]+)/);
+    if(!m)return;
+    var d=normImportDate(m[2]);if(!d)return;
+    if(m[1].trim()&&!/客/.test(m[1])){if(!r.factoryDelivery)r.factoryDelivery=d;}
+    else if(!r.custDelivery)r.custDelivery=d;
+  });
+  var noteM=text.match(/備[註注]\s*[:：]?\s*([\s\S]+)/);
+  if(noteM)r.note=noteM[1].trim();
+  // 品項：「料號*數量/ 品名」，用 * 來跟單號那幾行區分
+  var itemRe=/([A-Za-z0-9][A-Za-z0-9\-]{4,})\s*[*x×＊]\s*([\d,]+)\s*(?:pcs?|個|个|k)?/i;
+  text.split(/\n/).forEach(function(line){
+    var m=line.match(itemRe);if(!m)return;
+    var slash=line.indexOf("/");
+    r.items.push({id:uid(),pn:m[1].trim(),qty:String(parseInt(m[2].replace(/,/g,""),10)||""),price:"",
+      desc:slash>=0?line.slice(slash+1).trim():"",remark:""});
+  });
+  var filled=0;["custName","csNo","cpNo","pcNo","po","custDelivery"].forEach(function(k){if(r[k])filled++;});
+  r.found=filled+r.items.length;
+  return r;
 }
 /* 這個客戶這個料號最近一次的單價（拿來提示，不會自動填） */
 function lastPriceForItem(cust,pn,skipOid){
@@ -1102,6 +1174,7 @@ function renderDetail(){
   h+='<div class="panel" style="margin-bottom:22px;padding:14px 20px"><div class="row" style="justify-content:space-between;align-items:center"><b>🧾 訂單 <span class="count">'+orders.length+'</span></b>'+
      (crev2?'<span class="revchip">'+icon("dollar",12)+'累積下單 '+crev2+'</span>':"")+
      '<div class="row" style="gap:8px;flex:none">'+(orders.length>1?'<button class="btn-soft" data-action="collapse-orders" data-oids="'+cOids.join(",")+'" style="padding:6px 11px">'+(cAnyOpen?"⊟ 收合全部":"⊞ 展開全部")+'</button>':"")+
+     '<button class="btn-soft" data-action="paste-order" data-cid="'+c.id+'" style="padding:6px 12px">📋 貼上訂單</button>'+
      '<button class="btn-soft" data-action="add-order" style="padding:6px 12px">＋ 新增訂單</button></div></div>';
   if(orders.length)h+=ordersList(orders.map(function(o){return {c:c,o:o};}),false);
   else h+='<p class="muted" style="font-size:13px;margin:8px 0 0">還沒有訂單，客人正式下單後點「新增訂單」記一筆。</p>';
@@ -1325,6 +1398,7 @@ function renderOrders(){
   var h='<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h2 class="sectitle">訂單 <span class="count">'+list.length+'</span></h2>'+
     '<p class="subt">依客戶分組，同一個客戶的訂單集中列在一起（新的在上）。可用下面的客戶 / 年份下拉或搜尋框過濾。單價空白時會提示這個客戶上次的價格，⧉ 可把整張單複製成新訂單。</p></div>'+
     '<div class="row" style="gap:8px;flex:none">'+(allOids.length?'<button class="btn-soft" data-action="collapse-orders" data-oids="'+allOids.join(",")+'" style="padding:7px 12px">'+(anyOpen?"⊟ 收合全部":"⊞ 展開全部")+'</button>':"")+
+    '<button class="btn-soft" data-action="paste-order" style="padding:7px 12px">📋 貼上訂單</button>'+
     '<button class="btn-soft" data-action="ostatus-mgr" style="padding:7px 12px">⚙ 狀態</button>'+
     '<button class="btn-soft" data-action="sop-template" style="padding:7px 14px">⚙ SOP 範本</button></div></div>';
   var tabs=[["all","全部",base.length]];
@@ -1404,13 +1478,23 @@ function orderCard(c,o,withCust){
     ORDER_CURRENCIES.map(function(x){return '<option'+((o.currency||"USD")===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
   var collapsed=!!S.orderCollapse[o.id];
   var sopA=o.sop||[];var sopDn=sopA.filter(function(s){return s.done;}).length;
-  var sumBits=[];if(its.length)sumBits.push(its.length+' 品項');if(o.custDelivery)sumBits.push('交期 '+esc(o.custDelivery));if(sopA.length)sumBits.push('SOP '+sopDn+'/'+sopA.length);
-  var h='<div class="ocard'+(o.id===S.newOrderId?' onew':'')+(collapsed?' ocollapsed':'')+'">';
+  var sumBits=[];
+  if(its.length)sumBits.push('<span class="ofact">品項 <b>'+its.length+'</b></span>');
+  if(o.custDelivery){
+    var ddz=daysSince(o.custDelivery),shipped=!!(o.shipDate&&String(o.shipDate).trim());
+    var cls=shipped?"ok":(ddz>0?"late":(ddz>=-(S.data.settings.leadDays||14)?"due":""));
+    var tail=shipped?"":(ddz>0?(" · 過 "+ddz+" 天"):(ddz===0?" · 今天":(" · 剩 "+(-ddz)+" 天")));
+    sumBits.push('<span class="ofact '+cls+'">'+icon("truck",11)+'交期 <b>'+esc(o.custDelivery)+'</b>'+tail+'</span>');
+  }
+  if(o.shipDate)sumBits.push('<span class="ofact ok">📦 已出 <b>'+esc(o.shipDate)+'</b></span>');
+  if(o.factory)sumBits.push('<span class="ofact">'+icon("factory",11)+esc(o.factory)+'</span>');
+  if(sopA.length)sumBits.push('<span class="ofact'+(sopDn===sopA.length?' ok':'')+'">SOP <b>'+sopDn+'/'+sopA.length+'</b></span>');
+  var h='<div class="ocard'+(o.id===S.newOrderId?' onew':'')+(collapsed?' ocollapsed':'')+'" style="--oacc:'+orderAccent(o.status)+'">';
   h+='<div class="ohead"><button class="ochev'+(collapsed?'':' open')+'" data-action="toggle-ocard" data-oid="'+o.id+'" title="收合/展開">'+icon("chev",15)+'</button>'+stSel+
     (withCust?'<a href="#" data-action="open" data-id="'+c.id+'" style="font-weight:700;flex:none">'+esc(c.name)+'</a>':"")+
     '<input class="oin" '+da+' data-of="po" value="'+esc(o.po)+'" placeholder="PO#" style="flex:0 1 150px;font-weight:700">'+
     '<input class="oin" '+da+' data-of="csNo" value="'+esc(o.csNo)+'" placeholder="訂單單號" style="flex:0 1 160px;font-size:12px;color:#6b6680">'+
-    '<span class="osum ocollap-only">'+sumBits.join(' · ')+'</span>'+
+    '<span class="osum ocollap-only">'+sumBits.join('')+'</span>'+
     payBtn+
     '<span class="amt" style="display:inline-flex;align-items:center;gap:3px">'+curSel+'<b id="oamt-'+o.id+'">'+fmtMoney(orderAmount(o))+'</b></span>'+
     '<div class="row" style="gap:0;flex:none;flex-wrap:nowrap">'+
@@ -2184,6 +2268,7 @@ function renderModal(){
   else if(m.type==="cats")b=catsModal();
   else if(m.type==="sop")b=sopModal();
   else if(m.type==="importq")b=importqModal(m.draft);
+  else if(m.type==="pasteorder")b=pasteOrderModal(m.draft);
   else if(m.type==="ostatus")b=ostatusModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
@@ -2310,6 +2395,36 @@ function importqModal(d){
     '<p class="muted" style="font-size:12px;margin:2px 0 0">上傳 PDF 會自動解析並建立報價（含圖片）；貼文字則按「解析並建立」。之後可再檢查/微調。</p>';
   return shell("從老闆系統匯入報價",body,"解析並建立（文字）");
 }
+function pasteOrderModal(d){
+  d=d||{};
+  if(!d.parsed){
+    var body='<div class="pasteHint">在下方貼上訂單確認信的內容。系統會自動辨識 <b>客戶、訂單單號、請購單號、採購單號、客人 PO#、交期、品項與數量</b>，建立後你可以再逐欄檢查修改。</div>'+
+      '<textarea class="inp" id="po_text" rows="12" placeholder="請把整段訊息貼在這裡…" style="font-size:13px;line-height:1.6">'+esc(d.text||"")+'</textarea>'+
+      (d.err?'<p style="color:#C23A55;font-size:13px;font-weight:600;margin:2px 0 0">'+esc(d.err)+'</p>':"");
+    return shell("貼上訂單確認信",body,"解析並確認 →");
+  }
+  var r=d.parsed;
+  var custOpts=S.data.customers.map(function(c){return '<option value="'+c.id+'"'+(d.cid===c.id?" selected":"")+'>'+esc(c.name)+'</option>';}).join("");
+  var rowsHTML=r.items.map(function(it){
+    return '<tr><td style="font-family:monospace;font-weight:600">'+esc(it.pn)+'</td>'+
+      '<td style="text-align:right;font-variant-numeric:tabular-nums">'+esc(it.qty)+'</td>'+
+      '<td style="color:#55506a">'+esc(it.desc)+'</td></tr>';
+  }).join("");
+  function row(lbl,val){return val?('<div class="pkv"><span>'+lbl+'</span><b>'+esc(val)+'</b></div>'):"";}
+  var body=(d.matched
+      ?'<div class="pasteOk">✓ 對應到客戶 <b>'+esc((getC(d.cid)||{}).name||"")+'</b>，確認後會把這筆訂單加進這個客戶底下。</div>'
+      :'<div class="pasteWarn">⚠ 信裡的客戶「'+esc(r.custName||"（沒抓到）")+'」在系統中找不到，請在下面手動選一個客戶。</div>')+
+    fld("加到哪個客戶 *",'<select class="inp" id="po_cust"><option value="">— 請選擇客戶 —</option>'+custOpts+'</select>')+
+    '<div class="pgrid">'+row("訂單單號",r.csNo)+row("請購單號",r.cpNo)+row("採購單號",r.pcNo)+row("客人 PO#",r.po)+
+      row("交期(客)",r.custDelivery)+row("交期(廠)",r.factoryDelivery)+'</div>'+
+    (r.items.length
+      ?'<div><div class="lbl2" style="font-size:12px;margin-bottom:4px">品項 '+r.items.length+' 項（單價之後在訂單上補）</div>'+
+        '<div class="ptwrap"><table class="ptable"><thead><tr><th>料號</th><th style="text-align:right;width:80px">數量</th><th>品名</th></tr></thead><tbody>'+rowsHTML+'</tbody></table></div></div>'
+      :'<p style="color:#C23A55;font-size:13px;margin:0">沒有辨識到品項（格式需要像 <code>G4TE000001*2000PCS/ 品名</code>），建立後可以自己加。</p>')+
+    (r.note?fld("備註",'<div class="pnote">'+esc(r.note)+'</div>'):"")+
+    '<button class="btn-soft" data-action="paste-back" style="padding:6px 12px;align-self:flex-start">← 重貼一次</button>';
+  return shell("確認訂單內容",body,"建立訂單");
+}
 function sopModal(){
   var rows=S.data.settings.orderSop.map(function(tx,i){return '<div class="repeat"><span class="grow">'+(i+1)+'. '+esc(tx)+'</span><button class="delx" data-action="del-sopt" data-i="'+i+'">'+icon("trash",13)+'</button></div>';}).join("");
   var body='<p class="muted" style="margin:0 0 6px;font-size:13px">之後每張<b>新訂單</b>會自動帶入這些步驟，做完就在訂單上打勾。已存在的訂單不受影響（可在各訂單上用「＋ 加一步」補）。</p>'+rows+
@@ -2368,6 +2483,9 @@ document.addEventListener("click",function(e){
   if(a==="ocust-only"){S.ocust=t.getAttribute("data-cid")||"";render();window.scrollTo(0,0);return;}
   if(a==="ocust-clear"){S.ocust="";render();return;}
   if(a==="osearch-clear"){S.oq="";render();return;}
+  if(a==="paste-order"){S.modal={type:"pasteorder",draft:{text:"",parsed:null,cid:t.getAttribute("data-cid")||""}};renderModal();
+    setTimeout(function(){var el=document.getElementById("po_text");if(el)el.focus();},30);return;}
+  if(a==="paste-back"){if(S.modal&&S.modal.draft){S.modal.draft.parsed=null;S.modal.draft.err="";renderModal();}return;}
   if(a==="copy-order"){
     var cpc=getC(t.getAttribute("data-cid"));var cpo=(cpc.orders||[]).filter(function(x){return x.id===t.getAttribute("data-oid");})[0];
     if(cpo){
@@ -2727,6 +2845,39 @@ function saveModal(){
   else if(m.type==="qcompany"){S.data.quoteCompany={zh:rv("qc_zh"),en:rv("qc_en"),addr:rv("qc_addr"),tel:rv("qc_tel")};}
   else if(m.type==="cats"){if(m.backTo){S.modal=m.backTo;save();renderModal();render();return;}S.modal=null;save();render();return;}
   else if(m.type==="sop"){var sv2=document.getElementById("sopt_new");if(sv2&&sv2.value.trim())S.data.settings.orderSop.push(sv2.value.trim());S.modal=null;save();renderModal();render();return;}
+  else if(m.type==="pasteorder"){
+    if(!d.parsed){
+      var ptxt=(document.getElementById("po_text")||{}).value||"";
+      d.text=ptxt;
+      if(!ptxt.trim()){d.err="請先貼上訊息。";renderModal();return;}
+      var pr=parseOrderEmail(ptxt);
+      if(pr.found<2){d.err="辨識不出訂單欄位——請確認貼的是訂單確認信，或直接用「＋ 新增訂單」手動輸入。";renderModal();return;}
+      var mc=findCustomerByName(pr.custName);
+      d.parsed=pr;d.cid=mc?mc.id:"";d.matched=!!mc;d.err="";
+      renderModal();return;
+    }
+    var pcid=rv("po_cust");
+    if(!pcid){alert("請先選一個客戶。");return;}
+    var pc=getC(pcid);var pp=d.parsed;
+    if(!Array.isArray(pc.orders))pc.orders=[];
+    var no={id:uid(),createdAt:todayISO(),od:todayISO(),
+      custDelivery:pp.custDelivery||"",factoryDelivery:pp.factoryDelivery||"",
+      po:pp.po||"",csNo:pp.csNo||"",cpNo:pp.cpNo||"",pcNo:pp.pcNo||"",
+      arNo:"",noticeNo:"",invNo:"",shipNo:"",factory:"",shipDate:"",
+      currency:"USD",status:orderStatuses()[0]||"生產中",note:pp.note||"",
+      payTerms:"",paid:false,paidDate:"",payments:[],
+      items:(pp.items.length?pp.items:[{id:uid(),pn:"",qty:"",price:"",desc:"",remark:""}]),
+      sop:(S.data.settings.orderSop||[]).map(function(tx){return {id:uid(),text:tx,done:false,doneAt:""};})};
+    no.pn=orderPNs(no);
+    pc.orders.unshift(no);
+    S.orderCollapse[no.id]=false;S.newOrderId=no.id;
+    S.modal=null;S.view="orders";S.ocust=pcid;S.filter="all";S.oq="";S.oyear="";
+    save();render();window.scrollTo(0,0);
+    showToast("已從信件建立訂單（"+pp.items.length+" 個品項），單價記得補上",function(){
+      pc.orders=pc.orders.filter(function(x){return x.id!==no.id;});
+    });
+    return;
+  }
   else if(m.type==="importq"){
     var icid=rv("impq_cust");var itxt=(document.getElementById("impq_text")||{}).value||"";
     var parsed=parseQuoteImport(itxt);
