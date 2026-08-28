@@ -469,6 +469,18 @@ body.colresizing .oin{pointer-events:none}
 .pkv{display:flex;flex-direction:column;gap:1px;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
 .pkv span{font-size:10.5px;color:var(--muted);font-weight:700}
 .pkv b{font-size:13px;font-family:monospace;word-break:break-all}
+/* 推廣跟進 */
+.fuwrap{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.fubtn{font-size:11px;font-weight:700;color:var(--violet);background:var(--violet-soft);border-radius:8px;padding:3px 8px;white-space:nowrap}
+.fubtn:hover{background:#E2E6FA}
+.fucount{font-size:11px;font-weight:700;color:#55586A;background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px 7px;white-space:nowrap}
+.fucount:hover{border-color:var(--violet);color:var(--violet)}
+.fucount.on{background:var(--violet);color:#fff;border-color:var(--violet)}
+.pitchlogrow>td{background:rgba(94,106,210,.05);border-bottom:1px solid var(--line)}
+.pitchlogbox{padding:10px 12px 12px}
+.pitchlogbox .line{border-left-color:#D8DDF5}
+.pitchlogbox .note{font-size:13px;margin:2px 0 0}
+.pitchlogbox li{padding-bottom:11px}
 .pnote{font-size:13px;white-space:pre-wrap;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-top:5px}
 
 /* 訂單卡片：靠左色條標出狀態，收合時一眼看到重點 */
@@ -829,7 +841,7 @@ function normalize(d){
   if(!Array.isArray(d.partReqs))d.partReqs=[];
   d.partReqs.forEach(function(p){if(!p.id)p.id=uid();if(PART_STATUS.indexOf(p.status)<0)p.status="申請中";["date","subject","note","customer"].forEach(function(k){if(p[k]==null)p[k]="";});if(!p.createdAt)p.createdAt=p.date||todayISO();});
   if(!Array.isArray(d.pitches))d.pitches=[];
-  d.pitches.forEach(function(p){if(!p.id)p.id=uid();if(PITCH_STATUS.indexOf(p.status)<0)p.status="待回覆";["date","product","subject","feedback","customer","followUp"].forEach(function(k){if(p[k]==null)p[k]="";});if(!p.createdAt)p.createdAt=p.date||todayISO();});
+  d.pitches.forEach(function(p){if(!p.id)p.id=uid();if(PITCH_STATUS.indexOf(p.status)<0)p.status="待回覆";["date","product","subject","feedback","customer","followUp"].forEach(function(k){if(p[k]==null)p[k]="";});if(!p.createdAt)p.createdAt=p.date||todayISO();if(!Array.isArray(p.logs))p.logs=[];p.logs.forEach(function(l){if(!l.id)l.id=uid();if(l.date==null)l.date="";if(l.note==null)l.note="";});});
   if(!Array.isArray(d.todoWeeks))d.todoWeeks=[];
   d.todoWeeks.forEach(function(w){(w.items||[]).forEach(function(it){
     if(!Array.isArray(it.steps))it.steps=[];
@@ -893,7 +905,7 @@ function normalize(d){
 }
 
 /* ===================== 狀態 ===================== */
-var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:"",oq:"",oyear:""};
+var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:"",oq:"",oyear:"",pitchOpen:{}};
 
 function load(){try{var r=localStorage.getItem(KEY);if(r){S.data=normalize(JSON.parse(r));return;}}catch(e){}S.data=normalize(seed());save();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S.data));var s=document.getElementById("saved");s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1100);}catch(e){console.error(e);}}
@@ -1156,8 +1168,8 @@ function renderDetail(){
      (lastPitch?'<span class="muted" style="font-size:12px">最近一次：'+esc(lastPitch.date)+(lastPitch.product?(' · '+esc(lastPitch.product)):"")+'</span>':"")+
      '<button class="btn-soft" data-action="add-pitch" data-cid="'+c.id+'" style="padding:6px 12px;flex:none">＋ 新增推廣</button></div>';
   if(myPitches.length){
-    h+='<div class="ptwrap" style="margin-top:10px"><table class="ptable"><colgroup><col style="width:118px"><col style="width:140px"><col style="width:180px"><col><col style="width:118px"><col style="width:88px"><col style="width:28px"></colgroup>'+
-      '<thead><tr><th>推薦日期</th><th>郵件主旨</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>結果</th><th></th></tr></thead><tbody>'+
+    h+='<div class="ptwrap" style="margin-top:10px"><table class="ptable"><colgroup><col style="width:118px"><col style="width:140px"><col style="width:180px"><col><col style="width:118px"><col style="width:104px"><col style="width:88px"><col style="width:28px"></colgroup>'+
+      '<thead><tr><th>推薦日期</th><th>郵件主旨</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>跟進紀錄</th><th>結果</th><th></th></tr></thead><tbody>'+
       myPitches.map(function(p){return pitchRow(p,true);}).join("")+'</tbody></table></div>';
   }else h+='<p class="muted" style="font-size:13px;margin:8px 0 0">還沒有推廣紀錄，推薦新產品給這位客戶後點「新增推廣」記一筆。</p>';
   h+='</div>';
@@ -1689,8 +1701,8 @@ function renderPitches(){
         head+='<div class="gcontacts"><span class="gcontact muted">尚未建立聯絡窗口的 email — <button data-action="open" data-id="'+g.cid+'" style="color:var(--violet);font-weight:700">去客戶頁加一個</button></span></div>';
       }
     }
-    var tbl='<div class="ptwrap"><table class="ptable"><colgroup><col style="width:118px"><col style="width:140px"><col style="width:180px"><col><col style="width:118px"><col style="width:88px"><col style="width:150px"><col style="width:28px"></colgroup>'+
-      '<thead><tr><th>推薦日期</th><th>郵件主旨</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>結果</th><th>客戶（可改）</th><th></th></tr></thead><tbody>'+
+    var tbl='<div class="ptwrap"><table class="ptable"><colgroup><col style="width:118px"><col style="width:140px"><col style="width:180px"><col><col style="width:118px"><col style="width:104px"><col style="width:88px"><col style="width:150px"><col style="width:28px"></colgroup>'+
+      '<thead><tr><th>推薦日期</th><th>郵件主旨</th><th>推薦產品</th><th>客戶反饋 / 狀況</th><th>下次跟進</th><th>跟進紀錄</th><th>結果</th><th>客戶（可改）</th><th></th></tr></thead><tbody>'+
       g.list.map(pitchRow).join("")+'</tbody></table></div>';
     return '<div class="qgroupsec">'+head+tbl+'</div>';
   }).join("");
@@ -1710,10 +1722,40 @@ function pitchRow(p,hideCust){
     '<td><input class="oin" '+da+' data-ptf="product" value="'+esc(p.product)+'" title="'+esc(p.product)+'" placeholder="磁鐵支架、平板架…" style="font-weight:600"></td>'+
     '<td><textarea class="oin ptnote" '+da+' data-ptf="feedback" rows="1" placeholder="例：9/27 聯繫過，目前沒有支架需求">'+esc(p.feedback)+'</textarea></td>'+
     '<td><input class="oin" type="date" '+da+' data-ptf="followUp" value="'+esc(p.followUp)+'"'+fuWarn+'></td>'+
+    '<td>'+fuCell(p)+'</td>'+
     '<td>'+stSel+'</td>'+
     (hideCust?"":'<td>'+custSel+'</td>')+
     '<td><button class="iconmini del" data-action="del-pitch" data-piid="'+p.id+'">'+icon("x",12)+'</button></td>'+
-    '</tr>';
+    '</tr>'+
+    (S.pitchOpen[p.id]?pitchLogRow(p,hideCust):"");
+}
+/* 「跟進紀錄」欄：記一次跟進，以及展開看歷程 */
+function fuCell(p){
+  var n=(p.logs||[]).length;
+  var h='<div class="fuwrap">';
+  h+='<button class="fubtn" data-action="add-pitchlog" data-piid="'+p.id+'" title="記錄這次的跟進（可同時排下次跟進日、改結果）">＋ 跟進</button>';
+  if(n){
+    var last=p.logs[p.logs.length-1];
+    h+='<button class="fucount'+(S.pitchOpen[p.id]?" on":"")+'" data-action="toggle-pitchlog" data-piid="'+p.id+'" title="'+esc("最近："+(last.date||"")+" "+(last.note||""))+'">'+n+' 次 '+(S.pitchOpen[p.id]?"▴":"▾")+'</button>';
+  }
+  return h+'</div>';
+}
+/* 展開後的跟進歷程（含第一次推薦） */
+function pitchLogRow(p,hideCust){
+  var cols=hideCust?8:9;
+  var logs=(p.logs||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+  var items='<li><span class="pt"></span><div class="row" style="gap:8px"><span class="date">'+esc(p.date||"—")+'</span><span class="threadtag gen">第一次推薦</span></div>'+
+    '<p class="note">'+esc(p.product||"（未填產品）")+(p.subject?('　主旨：'+esc(p.subject)):"")+'</p></li>';
+  items+=logs.map(function(l){
+    return '<li><span class="pt"></span><div class="row" style="gap:8px"><span class="date">'+esc(l.date||"—")+'</span>'+
+      '<button class="delx right" data-action="del-pitchlog" data-piid="'+p.id+'" data-lid="'+l.id+'" title="刪除這筆">'+icon("x",12)+'</button></div>'+
+      '<p class="note">'+autolink(l.note||"")+'</p></li>';
+  }).join("");
+  return '<tr class="pitchlogrow"><td colspan="'+cols+'"><div class="pitchlogbox">'+
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">'+
+      '<b style="font-size:12px;color:#55506a">跟進歷程 '+logs.length+' 次</b>'+
+      '<button class="qb" data-action="add-pitchlog" data-piid="'+p.id+'" style="padding:2px 10px">＋ 記一次跟進</button></div>'+
+    '<ol class="line" style="margin:0 0 0 6px">'+items+'</ol></div></td></tr>';
 }
 function pitchByEl(el){return (S.data.pitches||[]).filter(function(p){return p.id===el.getAttribute("data-piid");})[0];}
 
@@ -2289,6 +2331,7 @@ function renderModal(){
   else if(m.type==="sop")b=sopModal();
   else if(m.type==="importq")b=importqModal(m.draft);
   else if(m.type==="pasteorder")b=pasteOrderModal(m.draft);
+  else if(m.type==="pitchlog")b=pitchLogModal(m.draft);
   else if(m.type==="ostatus")b=ostatusModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
@@ -2415,6 +2458,22 @@ function importqModal(d){
     '<p class="muted" style="font-size:12px;margin:2px 0 0">上傳 PDF 會自動解析並建立報價（含圖片）；貼文字則按「解析並建立」。之後可再檢查/微調。</p>';
   return shell("從老闆系統匯入報價",body,"解析並建立（文字）");
 }
+function pitchLogModal(d){
+  d=d||{};
+  var p=(S.data.pitches||[]).filter(function(x){return x.id===d.piid;})[0]||{};
+  var cust=p.customer?getC(p.customer):null;
+  var n=(p.logs||[]).length;
+  var stSel='<select class="inp" id="pl_status">'+PITCH_STATUS.map(function(x){return '<option'+((d.status||p.status)===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
+  var body='<div class="pasteHint" style="background:#EEF0FB;border-color:#D8DDF5;color:#3D4794">'+
+      '<b>'+esc(cust?cust.name:"（未綁客戶）")+'</b> ・ '+esc(p.product||"（未填產品）")+
+      '<br>第一次推薦 '+esc(p.date||"—")+(n?('，已跟進 '+n+' 次'):'，還沒跟進過')+'</div>'+
+    '<div class="two">'+fld("這次跟進的日期",'<input class="inp" type="date" id="pl_date" value="'+esc(d.date||todayISO())+'">')+
+      fld("下次再追（留空＝不用再追）",'<input class="inp" type="date" id="pl_next" value="'+esc(d.next!=null?d.next:"")+'">')+'</div>'+
+    fld("這次做了什麼 / 客戶怎麼回 *",'<textarea class="inp" id="pl_note" rows="3" placeholder="例：再寄一次型錄並詢問是否有需求；客戶說這季預算已滿，年後再談">'+esc(d.note||"")+'</textarea>')+
+    fld("結果",stSel)+
+    '<p class="muted" style="font-size:12px;margin:0">存檔後會加進這筆推廣的跟進歷程，並更新「下次跟進」與「結果」。</p>';
+  return shell("記一次跟進",body,"儲存");
+}
 function pasteOrderModal(d){
   d=d||{};
   if(!d.parsed){
@@ -2480,6 +2539,7 @@ function readModal(){
   else if(m.type==="update")Object.assign(d,{date:rv("u_date"),note:rv("u_note"),thread:(document.getElementById("u_thread")?rv("u_thread"):(d.thread||""))});
   else if(m.type==="quote")Object.assign(d,{product:rv("q_prod"),currency:rv("q_cur"),quoteDate:rv("q_date"),validUntil:rv("q_valid"),note:rv("q_note")});
   else if(m.type==="sample")Object.assign(d,{item:rv("s_item"),qty:rv("s_qty"),shipDate:rv("s_ship"),status:rv("s_status"),courier:rv("s_courier"),tracking:rv("s_track"),feeType:rv("s_fee"),feeStatus:rv("s_feest"),feeCustom:rv("s_feecustom"),feedback:rv("s_fb")});
+  else if(m.type==="pitchlog")Object.assign(d,{date:rv("pl_date"),next:rv("pl_next"),note:rv("pl_note"),status:rv("pl_status")});
   else if(m.type==="note")Object.assign(d,{title:rv("n_title"),content:rv("n_content"),scope:rv("n_scope")});
   else if(m.type==="vendor")Object.assign(d,{name:rv("v_name"),type:rv("v_type"),note:rv("v_note")});
   else if(m.type==="exchange")Object.assign(d,{text:rv("x_text"),date:rv("x_date")});
@@ -2505,6 +2565,20 @@ document.addEventListener("click",function(e){
   if(a==="osearch-clear"){S.oq="";render();return;}
   if(a==="paste-order"){S.modal={type:"pasteorder",draft:{text:"",parsed:null,cid:t.getAttribute("data-cid")||""}};renderModal();
     setTimeout(function(){var el=document.getElementById("po_text");if(el)el.focus();},30);return;}
+  if(a==="add-pitchlog"){
+    var apid=t.getAttribute("data-piid");
+    var apo=(S.data.pitches||[]).filter(function(x){return x.id===apid;})[0];
+    S.modal={type:"pitchlog",draft:{piid:apid,date:todayISO(),next:(apo&&apo.followUp)||"",note:"",status:(apo&&apo.status)||"待回覆"}};
+    renderModal();return;
+  }
+  if(a==="toggle-pitchlog"){var tpid=t.getAttribute("data-piid");S.pitchOpen[tpid]=!S.pitchOpen[tpid];render();return;}
+  if(a==="del-pitchlog"){
+    var dpid=t.getAttribute("data-piid"),dlid=t.getAttribute("data-lid");
+    var dpo=(S.data.pitches||[]).filter(function(x){return x.id===dpid;})[0];
+    if(dpo&&dpo.logs){var dl=dpo.logs.filter(function(l){return l.id===dlid;})[0],dix=dpo.logs.indexOf(dl);
+      softDelete("已刪除一筆跟進",function(){dpo.logs.splice(dix,1);},function(){dpo.logs.splice(Math.min(dix,dpo.logs.length),0,dl);});}
+    return;
+  }
   if(a==="paste-back"){if(S.modal&&S.modal.draft){S.modal.draft.parsed=null;S.modal.draft.err="";renderModal();}return;}
   if(a==="copy-order"){
     var cpc=getC(t.getAttribute("data-cid"));var cpo=(cpc.orders||[]).filter(function(x){return x.id===t.getAttribute("data-oid");})[0];
@@ -2865,6 +2939,20 @@ function saveModal(){
   else if(m.type==="qcompany"){S.data.quoteCompany={zh:rv("qc_zh"),en:rv("qc_en"),addr:rv("qc_addr"),tel:rv("qc_tel")};}
   else if(m.type==="cats"){if(m.backTo){S.modal=m.backTo;save();renderModal();render();return;}S.modal=null;save();render();return;}
   else if(m.type==="sop"){var sv2=document.getElementById("sopt_new");if(sv2&&sv2.value.trim())S.data.settings.orderSop.push(sv2.value.trim());S.modal=null;save();renderModal();render();return;}
+  else if(m.type==="pitchlog"){
+    if(!(d.note||"").trim()){alert("請寫一下這次跟進的內容。");return;}
+    var pl=(S.data.pitches||[]).filter(function(x){return x.id===d.piid;})[0];
+    if(pl){
+      if(!Array.isArray(pl.logs))pl.logs=[];
+      pl.logs.push({id:uid(),date:d.date||todayISO(),note:d.note});
+      pl.followUp=d.next||"";
+      if(d.status)pl.status=d.status;
+      S.pitchOpen[pl.id]=true;
+    }
+    S.modal=null;save();renderModal();render();
+    showToast("已記錄跟進"+(d.next?("，下次 "+d.next+" 再追"):"，沒有排下次跟進"),null);
+    return;
+  }
   else if(m.type==="pasteorder"){
     if(!d.parsed){
       var ptxt=(document.getElementById("po_text")||{}).value||"";
