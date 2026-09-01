@@ -469,6 +469,14 @@ body.colresizing .oin{pointer-events:none}
 .pkv{display:flex;flex-direction:column;gap:1px;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
 .pkv span{font-size:10.5px;color:var(--muted);font-weight:700}
 .pkv b{font-size:13px;font-family:monospace;word-break:break-all}
+/* 推廣波次 */
+.wavebox{background:rgba(255,255,255,.62);backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15);border:1px solid rgba(255,255,255,.75);border-radius:16px;padding:14px 16px;box-shadow:0 2px 10px rgba(90,70,80,.06);margin:14px 0 4px}
+.cycin{width:52px;display:inline-block;text-align:center;border:1px solid var(--line);background:#fff;padding:1px 4px;font-weight:700}
+.wgrp{margin-top:10px}
+.wglbl{font-size:12px;font-weight:700;color:#55506a;margin-bottom:4px;display:flex;align-items:center}
+.wlist{display:flex;flex-wrap:wrap;gap:4px;max-height:96px;overflow:auto}
+.wchip{font-size:11.5px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:#55586A;white-space:nowrap}
+.wchip.more{background:#F1F0EA;color:var(--muted)}
 /* 匯入名單預覽 */
 .impList{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.6);padding:6px}
 .impRow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;padding:4px 7px;border-bottom:1px dashed #EDEDEA}
@@ -1671,12 +1679,42 @@ function partRow(p){
 function partByEl(el){return (S.data.partReqs||[]).filter(function(p){return p.id===el.getAttribute("data-prid");})[0];}
 
 /* ---------- 推廣 / 開發（推薦新產品給客戶） ---------- */
+/* 「這一波該發給誰」：從沒推過的 + 距上次已滿一個週期的 */
+function pitchWavePanel(){
+  var w=pitchWaveLists();
+  var total=w.never.length+w.due.length;
+  var h='<div class="wavebox"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+    '<div><b style="font-size:15px">📮 這一波該發給誰 <span class="count">'+total+'</span></b>'+
+    '<div class="muted" style="font-size:12px;margin-top:2px">每 <input class="oin cycin" id="pcycle" type="number" min="1" max="365" value="'+w.days+'"> 天一波：從沒推過的，加上距上次接觸已滿 '+w.days+' 天、還沒收尾的</div></div>';
+  h+='<div class="row" style="gap:6px;flex:none">'+
+    (total?'<button class="btn-soft" data-action="copy-wave-emails" style="padding:6px 12px">📋 複製全部 email（'+custEmails(w.never.concat(w.due)).length+'）</button>':"")+
+    (total?'<button class="btn-dark" data-action="bulk-pitch" data-preset="wave" style="padding:6px 12px">📤 對這些人群發</button>':"")+'</div></div>';
+  if(!total)return h+'<div class="muted" style="font-size:13px;margin-top:8px">目前沒有人到期，等下一個週期。</div></div>';
+  function chip(x,sub){return '<span class="wchip" title="'+esc(sub)+'">'+esc(x)+'</span>';}
+  if(w.never.length){
+    h+='<div class="wgrp"><div class="wglbl">🆕 從沒推過（'+w.never.length+'）'+
+      '<button class="qb" data-action="copy-wave-emails" data-grp="never" style="padding:1px 8px;margin-left:6px">複製 email</button></div>'+
+      '<div class="wlist">'+w.never.slice(0,60).map(function(x){return chip(x.c.name,"從未推廣");}).join("")+
+      (w.never.length>60?('<span class="wchip more">…還有 '+(w.never.length-60)+' 家</span>'):"")+'</div></div>';
+  }
+  if(w.due.length){
+    h+='<div class="wgrp"><div class="wglbl">⏰ 該追了（'+w.due.length+'）'+
+      '<button class="qb" data-action="copy-wave-emails" data-grp="due" style="padding:1px 8px;margin-left:6px">複製 email</button></div>'+
+      '<div class="wlist">'+w.due.slice(0,60).map(function(x){return chip(x.c.name+' · '+x.gap+'天',"上次接觸 "+(x.last||"—"));}).join("")+
+      (w.due.length>60?('<span class="wchip more">…還有 '+(w.due.length-60)+' 家</span>'):"")+'</div></div>';
+  }
+  return h+'</div>';
+}
 function renderPitches(){
   var all=S.data.pitches||[];
   var list=all.filter(function(p){return S.filter==="all"||p.status===S.filter;});
   var h='<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h2 class="sectitle">📣 推廣 / 開發 <span class="count">'+list.length+'</span></h2>'+
     '<p class="subt">推薦新產品給客戶的紀錄：哪一天、推了什麼、客戶怎麼回。依客戶分組，一眼看到某客戶總共推了哪些產品。設「下次跟進」就會提醒你回頭追。</p></div>'+
-    '<button class="btn-dark" data-action="add-pitch" style="flex:none">'+icon("plus",16)+' 新增推廣</button></div>';
+    '<div class="row" style="gap:8px;flex:none">'+
+    '<button class="btn-soft" data-action="bulk-pitch" style="padding:7px 13px">📤 群發推廣</button>'+
+    '<button class="btn-soft" data-action="bulk-log" style="padding:7px 13px">✍️ 群發跟進</button>'+
+    '<button class="btn-dark" data-action="add-pitch">'+icon("plus",16)+' 新增推廣</button></div></div>';
+  h+=pitchWavePanel();
   var tabs=[["all","全部",all.length]];
   PITCH_STATUS.forEach(function(s){tabs.push([s,s,all.filter(function(p){return p.status===s;}).length]);});
   h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="pitchfilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
@@ -1763,6 +1801,50 @@ function pitchLogRow(p,hideCust){
       '<b style="font-size:12px;color:#55506a">跟進歷程 '+logs.length+' 次</b>'+
       '<button class="qb" data-action="add-pitchlog" data-piid="'+p.id+'" style="padding:2px 10px">＋ 記一次跟進</button></div>'+
     '<ol class="line" style="margin:0 0 0 6px">'+items+'</ol></div></td></tr>';
+}
+/* ── 推廣波次：誰該發下一封 ── */
+function pitchCycleDays(){var n=parseInt((S.data.settings||{}).pitchCycleDays,10);return (n>0?n:14);}
+/* 這筆推廣最後一次接觸的日期（含跟進紀錄） */
+function pitchLastTouch(p){
+  var d=p.date||"";
+  (p.logs||[]).forEach(function(l){if((l.date||"")>d)d=l.date||d;});
+  return d;
+}
+/* 還在跑的推廣（已收尾的不用再追） */
+function pitchLive(p){return p.status!=="無需求"&&p.status!=="成交";}
+/* 每個客戶的推廣狀態：推過幾次、最後接觸日、是否還在跑 */
+function custPitchMap(){
+  var m={};
+  (S.data.pitches||[]).forEach(function(p){
+    if(!p.customer)return;
+    var e=m[p.customer]||(m[p.customer]={n:0,last:"",live:false,pitches:[]});
+    e.n++;e.pitches.push(p);
+    var lt=pitchLastTouch(p);if(lt>e.last)e.last=lt;
+    if(pitchLive(p))e.live=true;
+  });
+  return m;
+}
+/* 分成「從沒推過」與「距上次已滿 N 天、還沒收尾」兩批 */
+function pitchWaveLists(days){
+  days=days||pitchCycleDays();
+  var m=custPitchMap(),never=[],due=[];
+  S.data.customers.forEach(function(c){
+    var e=m[c.id];
+    if(!e||!e.n){never.push({c:c});return;}
+    if(!e.live)return;
+    var gap=e.last?daysSince(e.last):9999;
+    if(gap>=days)due.push({c:c,last:e.last,gap:gap,pitches:e.pitches.filter(pitchLive)});
+  });
+  due.sort(function(a,b){return b.gap-a.gap;});
+  return {never:never,due:due,days:days};
+}
+function custEmails(list){
+  var out=[];
+  list.forEach(function(x){
+    var c=x.c||x;
+    (c.contacts||[]).forEach(function(ct){if(ct.email&&out.indexOf(ct.email)<0)out.push(ct.email);});
+  });
+  return out;
 }
 function pitchByEl(el){return (S.data.pitches||[]).filter(function(p){return p.id===el.getAttribute("data-piid");})[0];}
 
@@ -2340,6 +2422,8 @@ function renderModal(){
   else if(m.type==="pasteorder")b=pasteOrderModal(m.draft);
   else if(m.type==="pitchlog")b=pitchLogModal(m.draft);
   else if(m.type==="impcust")b=impCustModal(m.draft);
+  else if(m.type==="bulkpitch")b=bulkPitchModal(m.draft);
+  else if(m.type==="bulklog")b=bulkLogModal(m.draft);
   else if(m.type==="ostatus")b=ostatusModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
@@ -2485,6 +2569,80 @@ function impCustPreview(list){
   });
   return {add:add,skip:skip};
 }
+/* ── 群發推廣：一次幫一批客戶各建一筆推廣紀錄 ── */
+function bulkPitchModal(d){
+  d=d||{};d.sel=d.sel||{};
+  var w=pitchWaveLists();
+  var m=custPitchMap();
+  var pool=S.data.customers.slice();
+  var f=d.filter||"wave";
+  var inWave={};w.never.concat(w.due).forEach(function(x){inWave[x.c.id]=true;});
+  var shown=pool.filter(function(c){
+    if(f==="wave")return !!inWave[c.id];
+    if(f==="never")return !(m[c.id]&&m[c.id].n);
+    if(f==="potential")return c.status==="潛在客戶";
+    if(f==="A")return c.rating==="A";
+    return true;
+  });
+  var nSel=Object.keys(d.sel).filter(function(k){return d.sel[k];}).length;
+  var chips=[["wave","這一波該發的",w.never.length+w.due.length],["never","從沒推過",pool.filter(function(c){return !(m[c.id]&&m[c.id].n);}).length],
+    ["potential","潛在客戶",pool.filter(function(c){return c.status==="潛在客戶";}).length],["A","評級 A",pool.filter(function(c){return c.rating==="A";}).length],["all","全部客戶",pool.length]];
+  var body='<div class="pasteHint">選一批客戶，一次幫他們<b>各建立一筆推廣紀錄</b>（同樣的主旨與產品）。之後客戶回覆了再各自改結果就好。</div>'+
+    '<div class="two">'+fld("推薦日期",'<input class="inp" type="date" id="bp_date" value="'+esc(d.date||todayISO())+'">')+
+      fld("下次跟進日（預設 "+pitchCycleDays()+" 天後）",'<input class="inp" type="date" id="bp_next" value="'+esc(d.next||new Date(Date.now()+pitchCycleDays()*86400000).toISOString().slice(0,10))+'">')+'</div>'+
+    fld("郵件主旨",'<input class="inp" id="bp_subject" value="'+esc(d.subject||"")+'" placeholder="例：COMART | New MagSafe Car Mount Series">')+
+    fld("推薦產品 *",'<input class="inp" id="bp_product" value="'+esc(d.product||"")+'" placeholder="例：磁吸車用支架系列">')+
+    '<div><div class="lbl2" style="font-size:12px;margin-bottom:4px">選收件對象</div>'+
+    '<div class="row" style="gap:5px;margin-bottom:6px">'+chips.map(function(c){
+      return '<button class="tab'+(f===c[0]?" on":"")+'" data-action="bp-filter" data-f="'+c[0]+'" style="font-size:12px;padding:3px 10px">'+c[1]+' '+c[2]+'</button>';}).join("")+'</div>'+
+    '<div class="row" style="gap:6px;margin-bottom:6px"><button class="qb" data-action="bp-all">全選這批（'+shown.length+'）</button>'+
+      '<button class="qb" data-action="bp-none">清除選取</button>'+
+      '<span class="muted" style="font-size:12px;margin-left:auto">已選 <b>'+nSel+'</b> 家</span></div>'+
+    '<div class="impList">'+(shown.length?shown.map(function(c){
+      var e=m[c.id],sub=e&&e.n?('推過 '+e.n+' 次・上次 '+(e.last||"—")):'從未推廣';
+      var em=(c.contacts||[]).filter(function(x){return x.email;}).length;
+      return '<label class="impRow" style="cursor:pointer"><input type="checkbox" data-action="bp-tog" data-cid="'+c.id+'"'+(d.sel[c.id]?" checked":"")+' style="width:15px;height:15px">'+
+        '<b>'+esc(c.name)+'</b>'+(c.rating?'<span class="impTag g">'+esc(c.rating)+'</span>':"")+
+        '<span class="impTag">'+esc(sub)+'</span>'+(em?'':'<span class="impTag" style="background:#FBE9ED;color:#C23A55">無 email</span>')+'</label>';
+    }).join(""):'<div class="muted" style="font-size:13px;padding:8px">這個條件下沒有客戶。</div>')+'</div></div>';
+  return shell("群發推廣",body,nSel?("建立 "+nSel+" 筆推廣"):"請先選客戶");
+}
+/* ── 群發跟進：一次幫一批推廣加上同樣的跟進紀錄 ── */
+function bulkLogModal(d){
+  d=d||{};d.sel=d.sel||{};
+  var days=pitchCycleDays();
+  var live=(S.data.pitches||[]).filter(pitchLive);
+  var f=d.filter||"due";
+  var shown=live.filter(function(p){
+    if(f==="due")return daysSince(pitchLastTouch(p))>=days;
+    if(f==="wait")return p.status==="待回覆";
+    return true;
+  });
+  shown.sort(function(a,b){return (pitchLastTouch(a)||"").localeCompare(pitchLastTouch(b)||"");});
+  var nSel=Object.keys(d.sel).filter(function(k){return d.sel[k];}).length;
+  var chips=[["due","距上次滿 "+days+" 天",live.filter(function(p){return daysSince(pitchLastTouch(p))>=days;}).length],
+    ["wait","待回覆",live.filter(function(p){return p.status==="待回覆";}).length],["all","全部未收尾",live.length]];
+  var stSel='<select class="inp" id="bl_status"><option value="">不改結果</option>'+PITCH_STATUS.map(function(x){return '<option'+(d.status===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
+  var body='<div class="pasteHint">發完第二封（或第三封）之後，用這裡<b>一次把跟進紀錄加到多筆推廣上</b>，並順便把「下次跟進」往後排。</div>'+
+    '<div class="two">'+fld("這次跟進的日期",'<input class="inp" type="date" id="bl_date" value="'+esc(d.date||todayISO())+'">')+
+      fld("下次再追（預設 "+days+" 天後）",'<input class="inp" type="date" id="bl_next" value="'+esc(d.next||new Date(Date.now()+days*86400000).toISOString().slice(0,10))+'">')+'</div>'+
+    fld("這次做了什麼 *",'<textarea class="inp" id="bl_note" rows="2" placeholder="例：第二次跟進，寄新品型錄並詢問是否有需求">'+esc(d.note||"")+'</textarea>')+
+    fld("結果",stSel)+
+    '<div><div class="lbl2" style="font-size:12px;margin-bottom:4px">選要跟進的推廣</div>'+
+    '<div class="row" style="gap:5px;margin-bottom:6px">'+chips.map(function(c){
+      return '<button class="tab'+(f===c[0]?" on":"")+'" data-action="bl-filter" data-f="'+c[0]+'" style="font-size:12px;padding:3px 10px">'+c[1]+' '+c[2]+'</button>';}).join("")+'</div>'+
+    '<div class="row" style="gap:6px;margin-bottom:6px"><button class="qb" data-action="bl-all">全選這批（'+shown.length+'）</button>'+
+      '<button class="qb" data-action="bl-none">清除選取</button>'+
+      '<span class="muted" style="font-size:12px;margin-left:auto">已選 <b>'+nSel+'</b> 筆</span></div>'+
+    '<div class="impList">'+(shown.length?shown.map(function(p){
+      var c=p.customer?getC(p.customer):null;var lt=pitchLastTouch(p);var gap=lt?daysSince(lt):null;
+      return '<label class="impRow" style="cursor:pointer"><input type="checkbox" data-action="bl-tog" data-piid="'+p.id+'"'+(d.sel[p.id]?" checked":"")+' style="width:15px;height:15px">'+
+        '<b>'+esc(c?c.name:"（未綁客戶）")+'</b><span class="impTag">'+esc(p.product||"（未填產品）")+'</span>'+
+        '<span class="impTag">'+esc(p.status)+'</span>'+(gap!=null?'<span class="impTag">'+gap+' 天沒動</span>':"")+
+        ((p.logs||[]).length?'<span class="impTag">已跟進 '+p.logs.length+' 次</span>':"")+'</label>';
+    }).join(""):'<div class="muted" style="font-size:13px;padding:8px">這個條件下沒有推廣紀錄。</div>')+'</div></div>';
+  return shell("群發跟進",body,nSel?("加到 "+nSel+" 筆"):"請先選推廣");
+}
 function impCustModal(d){
   d=d||{};
   if(d.parsed){
@@ -2593,6 +2751,8 @@ function readModal(){
   else if(m.type==="update")Object.assign(d,{date:rv("u_date"),note:rv("u_note"),thread:(document.getElementById("u_thread")?rv("u_thread"):(d.thread||""))});
   else if(m.type==="quote")Object.assign(d,{product:rv("q_prod"),currency:rv("q_cur"),quoteDate:rv("q_date"),validUntil:rv("q_valid"),note:rv("q_note")});
   else if(m.type==="sample")Object.assign(d,{item:rv("s_item"),qty:rv("s_qty"),shipDate:rv("s_ship"),status:rv("s_status"),courier:rv("s_courier"),tracking:rv("s_track"),feeType:rv("s_fee"),feeStatus:rv("s_feest"),feeCustom:rv("s_feecustom"),feedback:rv("s_fb")});
+  else if(m.type==="bulkpitch")Object.assign(d,{date:rv("bp_date"),next:rv("bp_next"),subject:rv("bp_subject"),product:rv("bp_product")});
+  else if(m.type==="bulklog")Object.assign(d,{date:rv("bl_date"),next:rv("bl_next"),note:rv("bl_note"),status:rv("bl_status")});
   else if(m.type==="pitchlog")Object.assign(d,{date:rv("pl_date"),next:rv("pl_next"),note:rv("pl_note"),status:rv("pl_status")});
   else if(m.type==="note")Object.assign(d,{title:rv("n_title"),content:rv("n_content"),scope:rv("n_scope")});
   else if(m.type==="vendor")Object.assign(d,{name:rv("v_name"),type:rv("v_type"),note:rv("v_note")});
@@ -2748,6 +2908,34 @@ document.addEventListener("click",function(e){
   if(a==="pfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="add-pitch"){if(!Array.isArray(S.data.pitches))S.data.pitches=[];var npi={id:uid(),createdAt:todayISO(),date:todayISO(),customer:t.getAttribute("data-cid")||"",product:"",subject:"",feedback:"",followUp:"",status:"待回覆"};S.data.pitches.unshift(npi);save();render();var pfe=document.querySelector('.oin[data-piid="'+npi.id+'"][data-ptf="product"]');if(pfe){pfe.focus();pfe.scrollIntoView({block:"center",behavior:"smooth"});}return;}
   if(a==="del-pitch"){var piarr=S.data.pitches,pio=piarr.filter(function(x){return x.id===t.getAttribute("data-piid");})[0],piidx=piarr.indexOf(pio);softDelete("已刪除一筆推廣紀錄",function(){piarr.splice(piidx,1);},function(){piarr.splice(Math.min(piidx,piarr.length),0,pio);});return;}
+  if(a==="bulk-pitch"){
+    var pre={};
+    if(t.getAttribute("data-preset")==="wave"){var w0=pitchWaveLists();w0.never.concat(w0.due).forEach(function(x){pre[x.c.id]=true;});}
+    S.modal={type:"bulkpitch",draft:{date:todayISO(),sel:pre,filter:"wave"}};renderModal();return;
+  }
+  if(a==="bulk-log"){
+    var d0=pitchCycleDays(),pre2={};
+    (S.data.pitches||[]).forEach(function(p){if(pitchLive(p)&&daysSince(pitchLastTouch(p))>=d0)pre2[p.id]=true;});
+    S.modal={type:"bulklog",draft:{date:todayISO(),sel:pre2,filter:"due"}};renderModal();return;
+  }
+  if(a==="bp-filter"){readModal();S.modal.draft.filter=t.getAttribute("data-f");renderModal();return;}
+  if(a==="bl-filter"){readModal();S.modal.draft.filter=t.getAttribute("data-f");renderModal();return;}
+  if(a==="bp-all"||a==="bl-all"){
+    readModal();
+    document.querySelectorAll('[data-action="'+(a==="bp-all"?"bp-tog":"bl-tog")+'"]').forEach(function(el){
+      S.modal.draft.sel[el.getAttribute(a==="bp-all"?"data-cid":"data-piid")]=true;});
+    renderModal();return;
+  }
+  if(a==="bp-none"||a==="bl-none"){readModal();S.modal.draft.sel={};renderModal();return;}
+  if(a==="copy-wave-emails"){
+    var w1=pitchWaveLists(),grp=t.getAttribute("data-grp");
+    var src=grp==="never"?w1.never:(grp==="due"?w1.due:w1.never.concat(w1.due));
+    var mails=custEmails(src);
+    if(!mails.length){showToast("這批客戶都沒有填 email",null);return;}
+    if(navigator.clipboard)navigator.clipboard.writeText(mails.join("; "));
+    var ot=t.textContent;t.textContent="已複製 "+mails.length+" 個 ✓";
+    setTimeout(function(){t.textContent=ot;},1600);return;
+  }
   if(a==="pitchfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="import-quote"){S.modal={type:"importq",draft:{}};renderModal();return;}
   if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
@@ -2925,6 +3113,22 @@ document.addEventListener("change",function(e){
   if(pfc){var pfco=partByEl(pfc);if(pfco){pfco[pfc.getAttribute("data-pf")]=pfc.value;save();if(pfc.type==="date"||pfc.tagName==="SELECT")render();}return;}
   var piss=e.target.closest("[data-action='set-pitch-status']");
   if(piss){var pisso=(S.data.pitches||[]).filter(function(x){return x.id===piss.getAttribute("data-piid");})[0];if(pisso){pisso.status=piss.value;save();render();}return;}
+  var bpt=e.target.closest('[data-action="bp-tog"]');
+  if(bpt&&S.modal&&S.modal.draft){S.modal.draft.sel[bpt.getAttribute("data-cid")]=bpt.checked;
+    var lbl=document.querySelector(".mfoot .btn-dark");
+    if(lbl){var n=Object.keys(S.modal.draft.sel).filter(function(k){return S.modal.draft.sel[k];}).length;
+      lbl.textContent=n?("建立 "+n+" 筆推廣"):"請先選客戶";}
+    return;}
+  var blt=e.target.closest('[data-action="bl-tog"]');
+  if(blt&&S.modal&&S.modal.draft){S.modal.draft.sel[blt.getAttribute("data-piid")]=blt.checked;
+    var lbl2=document.querySelector(".mfoot .btn-dark");
+    if(lbl2){var n2=Object.keys(S.modal.draft.sel).filter(function(k){return S.modal.draft.sel[k];}).length;
+      lbl2.textContent=n2?("加到 "+n2+" 筆"):"請先選推廣";}
+    return;}
+  if(e.target.id==="pcycle"){
+    var v=parseInt(e.target.value,10);
+    if(v>0&&v<=365){S.data.settings.pitchCycleDays=v;save();render();}
+    return;}
   var ptfc=e.target.closest("[data-ptf]");
   if(ptfc){var ptfco=pitchByEl(ptfc);if(ptfco){ptfco[ptfc.getAttribute("data-ptf")]=ptfc.value;save();if(ptfc.type==="date"||ptfc.tagName==="SELECT")render();}return;}
   var tbs=e.target.closest("select[data-todobind]");
@@ -3029,10 +3233,46 @@ function saveModal(){
     });
     S.data=normalize(S.data);
     S.modal=null;S.view="customers";S.filter="all";
-    save();render();window.scrollTo(0,0);
+    save();renderModal();render();window.scrollTo(0,0);
     showToast("已匯入 "+created.length+" 筆潛在客戶",function(){
       S.data.customers=S.data.customers.filter(function(c){return created.indexOf(c.id)<0;});
     });
+    return;
+  }
+  else if(m.type==="bulkpitch"){
+    var ids=Object.keys(d.sel||{}).filter(function(k){return d.sel[k];});
+    if(!ids.length){alert("請先選要發的客戶。");return;}
+    if(!(d.product||"").trim()){alert("請填推薦產品（之後才看得出這一波推了什麼）。");return;}
+    if(!Array.isArray(S.data.pitches))S.data.pitches=[];
+    var made=[];
+    ids.forEach(function(cid){
+      var np={id:uid(),createdAt:todayISO(),date:d.date||todayISO(),customer:cid,
+        product:d.product||"",subject:d.subject||"",feedback:"",followUp:d.next||"",status:"待回覆",logs:[]};
+      S.data.pitches.unshift(np);made.push(np.id);
+    });
+    S.modal=null;S.view="pitches";S.filter="all";save();renderModal();render();window.scrollTo(0,0);
+    showToast("已建立 "+made.length+" 筆推廣紀錄",function(){
+      S.data.pitches=S.data.pitches.filter(function(p){return made.indexOf(p.id)<0;});});
+    return;
+  }
+  else if(m.type==="bulklog"){
+    var pids=Object.keys(d.sel||{}).filter(function(k){return d.sel[k];});
+    if(!pids.length){alert("請先選要跟進的推廣。");return;}
+    if(!(d.note||"").trim()){alert("請寫一下這次跟進的內容。");return;}
+    var undo=[];
+    (S.data.pitches||[]).forEach(function(p){
+      if(pids.indexOf(p.id)<0)return;
+      if(!Array.isArray(p.logs))p.logs=[];
+      var lid=uid();
+      p.logs.push({id:lid,date:d.date||todayISO(),note:d.note});
+      undo.push({p:p,lid:lid,followUp:p.followUp,status:p.status});
+      p.followUp=d.next||"";
+      if(d.status)p.status=d.status;
+    });
+    S.modal=null;S.view="pitches";save();renderModal();render();window.scrollTo(0,0);
+    showToast("已幫 "+undo.length+" 筆推廣記上跟進",function(){
+      undo.forEach(function(u){u.p.logs=u.p.logs.filter(function(l){return l.id!==u.lid;});
+        u.p.followUp=u.followUp;u.p.status=u.status;});});
     return;
   }
   else if(m.type==="pitchlog"){
@@ -3076,7 +3316,7 @@ function saveModal(){
     pc.orders.unshift(no);
     S.orderCollapse[no.id]=false;S.newOrderId=no.id;
     S.modal=null;S.view="orders";S.ocust=pcid;S.filter="all";S.oq="";S.oyear="";
-    save();render();window.scrollTo(0,0);
+    save();renderModal();render();window.scrollTo(0,0);
     showToast("已從信件建立訂單（"+pp.items.length+" 個品項），單價記得補上",function(){
       pc.orders=pc.orders.filter(function(x){return x.id!==no.id;});
     });
@@ -3086,7 +3326,7 @@ function saveModal(){
     var icid=rv("impq_cust");var itxt=(document.getElementById("impq_text")||{}).value||"";
     var parsed=parseQuoteImport(itxt);
     if(!parsed.items.length){alert("沒有解析到品項。\n\n用 PDF 直接上傳最準；貼文字則請從老闆系統的『表格』或 Excel 複製整個表格（要含料號與價格）。");return;}
-    var nd=importedToQuote(parsed,icid);S.modal=null;save();render();
+    var nd=importedToQuote(parsed,icid);S.modal=null;save();renderModal();render();
     showToast("已匯入 "+nd.items.length+" 個品項，請檢查後即可用",null);return;
   }
   S.modal=null;save();renderModal();render();
