@@ -469,6 +469,13 @@ body.colresizing .oin{pointer-events:none}
 .pkv{display:flex;flex-direction:column;gap:1px;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
 .pkv span{font-size:10.5px;color:var(--muted);font-weight:700}
 .pkv b{font-size:13px;font-family:monospace;word-break:break-all}
+/* 匯入名單預覽 */
+.impList{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.6);padding:6px}
+.impRow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;padding:4px 7px;border-bottom:1px dashed #EDEDEA}
+.impRow:last-child{border-bottom:none}
+.impRow.skip{color:var(--muted)}
+.impTag{font-size:10.5px;font-weight:700;background:#F1F0EA;color:#6b6680;border-radius:6px;padding:1px 6px}
+.impTag.g{background:var(--grl);color:#357B50}
 /* 推廣跟進 */
 .fuwrap{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .fubtn{font-size:11px;font-weight:700;color:var(--violet);background:var(--violet-soft);border-radius:8px;padding:3px 8px;white-space:nowrap}
@@ -2332,6 +2339,7 @@ function renderModal(){
   else if(m.type==="importq")b=importqModal(m.draft);
   else if(m.type==="pasteorder")b=pasteOrderModal(m.draft);
   else if(m.type==="pitchlog")b=pitchLogModal(m.draft);
+  else if(m.type==="impcust")b=impCustModal(m.draft);
   else if(m.type==="ostatus")b=ostatusModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
@@ -2457,6 +2465,52 @@ function importqModal(d){
     fld("方式二：貼上表格文字（從 Excel/網頁表格複製最準）",'<textarea class="inp" id="impq_text" rows="6" placeholder="在老闆系統的報價表格上全選複製、或匯出的 Excel 複製整個表格，貼到這裡（依 料號｜說明｜價格｜備註 自動分欄）。"></textarea>')+
     '<p class="muted" style="font-size:12px;margin:2px 0 0">上傳 PDF 會自動解析並建立報價（含圖片）；貼文字則按「解析並建立」。之後可再檢查/微調。</p>';
   return shell("從老闆系統匯入報價",body,"解析並建立（文字）");
+}
+/* ── 匯入潛在客戶名單（JSON）──
+   以公司名稱比對現有客戶，重複的整筆略過，不動到既有資料。 */
+function normCustName(n){
+  var s=String(n||"").toUpperCase();
+  s=s.replace(/[.,]/g," ");
+  s=s.replace(/\b(CO|LTD|LIMITED|INC|LLC|CORP|CORPORATION|COMPANY|GMBH|BV|SRL|SA|PTE|PVT|SDN|BHD|TRADING)\b/g,"");
+  s=s.replace(/[^A-Z0-9\u4e00-\u9fff]+/g,"");
+  return s||String(n||"").toUpperCase();
+}
+function impCustPreview(list){
+  var existing={};S.data.customers.forEach(function(c){existing[normCustName(c.name)]=c;});
+  var add=[],skip=[];
+  list.forEach(function(r){
+    if(!r||!r.name)return;
+    var k=normCustName(r.name);
+    if(existing[k])skip.push({row:r,cur:existing[k]});else{add.push(r);existing[k]={_pending:true};}
+  });
+  return {add:add,skip:skip};
+}
+function impCustModal(d){
+  d=d||{};
+  if(d.parsed){
+    var p=d.parsed;
+    var listHTML=function(arr,fn){return '<div class="impList">'+arr.map(fn).join("")+'</div>';};
+    var body='<div class="pasteOk">解析成功：共 <b>'+(p.add.length+p.skip.length)+'</b> 筆，其中 <b>'+p.add.length+'</b> 筆是新的、<b>'+p.skip.length+'</b> 筆已經在系統裡（會自動跳過，不會改到你現有的資料）。</div>';
+    if(p.add.length){
+      body+='<div><div class="lbl2" style="font-size:12px;margin-bottom:4px">✅ 會新增（'+p.add.length+' 筆，狀態設為潛在客戶）</div>'+
+        listHTML(p.add.slice(0,200),function(r){
+          return '<div class="impRow"><b>'+esc(r.name)+'</b>'+(r.country?'<span class="impTag">'+esc(r.country)+'</span>':"")+
+            (r.grade?'<span class="impTag g">'+esc(r.grade)+'</span>':"")+
+            ((r.contacts&&r.contacts.length)?'<span class="impTag">'+r.contacts.length+' 窗口</span>':"")+'</div>';})+
+        (p.add.length>200?'<p class="muted" style="font-size:12px;margin:4px 0 0">（只列出前 200 筆，實際會全部匯入）</p>':"")+'</div>';
+    }
+    if(p.skip.length){
+      body+='<details><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:var(--muted)">⏭ 已存在、會跳過（'+p.skip.length+' 筆）</summary>'+
+        listHTML(p.skip.slice(0,200),function(x){
+          return '<div class="impRow skip">'+esc(x.row.name)+'<span class="impTag">系統中：'+esc(x.cur.name)+'</span></div>';})+'</details>';
+    }
+    return shell("確認匯入",body,p.add.length?("匯入 "+p.add.length+" 筆"):"沒有新資料");
+  }
+  var body='<div class="pasteHint">貼上或選擇潛在客戶名單的 <b>JSON 檔</b>。系統會用<b>公司名稱</b>比對你現在的客戶，<b>已經有的自動跳過</b>，只加沒有的；不會動到你既有客戶的任何資料。</div>'+
+    fld("方式一：選擇 JSON 檔",'<label class="btn-soft" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;cursor:pointer">📄 選擇檔案<input type="file" id="imp_file" accept="application/json,.json" style="display:none"></label><span id="imp_fname" class="muted" style="font-size:12px;margin-left:8px"></span>')+
+    fld("方式二：直接貼上 JSON",'<textarea class="inp" id="imp_text" rows="8" placeholder=\'[{"name":"公司名","country":"日本","grade":"A","website":"","background":"...","relationship":"...","contacts":[{"name":"窗口","title":"","email":"a@b.com","phone":""}]}]\'>'+esc(d.text||"")+'</textarea>')+
+    (d.err?'<p style="color:#C23A55;font-size:13px;font-weight:600;margin:2px 0 0">'+esc(d.err)+'</p>':"");
+  return shell("匯入潛在客戶名單",body,"解析並預覽 →");
 }
 function pitchLogModal(d){
   d=d||{};
@@ -2877,6 +2931,17 @@ document.addEventListener("change",function(e){
   if(tbs){var bit=null;S.data.todoWeeks.forEach(function(w){(w.items||[]).forEach(function(i){if(i.id===tbs.getAttribute("data-todobind"))bit=i;});});if(bit){bit.cust=tbs.value||null;}S.bindTodo=null;save();render();return;}
   var tst=e.target.closest("[data-action='set-thread-stage']");
   if(tst){var pid2=tst.getAttribute("data-pid"),tid=tst.getAttribute("data-tid");var c2=getC(S.selectedId);var p2=c2.projects.filter(function(x){return x.id===pid2;})[0];var th=(p2.factorySubjects||[]).filter(function(t){return t.id===tid;})[0];if(th){th.stage=tst.value;p2.stage=rollupStage(p2);touch(p2);save();render();}return;}
+  if(e.target.id==="imp_file"&&e.target.files&&e.target.files[0]){
+    var impf=e.target.files[0];var fr=new FileReader();
+    var nameEl=document.getElementById("imp_fname");if(nameEl)nameEl.textContent=impf.name;
+    fr.onload=function(ev){
+      if(!S.modal||S.modal.type!=="impcust")return;
+      S.modal.draft.text=String(ev.target.result||"");S.modal.draft.err="";
+      var ta=document.getElementById("imp_text");if(ta)ta.value=S.modal.draft.text;
+      saveModal();
+    };
+    fr.readAsText(impf);return;
+  }
   if(e.target.id==="n_img"){handleImageUpload(e.target.files,"images");return;}
   if(e.target.id==="c_card"){handleImageUpload(e.target.files,"cards");return;}
   var rtg=e.target.closest("select.rowthread");
@@ -2939,6 +3004,37 @@ function saveModal(){
   else if(m.type==="qcompany"){S.data.quoteCompany={zh:rv("qc_zh"),en:rv("qc_en"),addr:rv("qc_addr"),tel:rv("qc_tel")};}
   else if(m.type==="cats"){if(m.backTo){S.modal=m.backTo;save();renderModal();render();return;}S.modal=null;save();render();return;}
   else if(m.type==="sop"){var sv2=document.getElementById("sopt_new");if(sv2&&sv2.value.trim())S.data.settings.orderSop.push(sv2.value.trim());S.modal=null;save();renderModal();render();return;}
+  else if(m.type==="impcust"){
+    if(!d.parsed){
+      var raw=d.text||((document.getElementById("imp_text")||{}).value||"");
+      if(!raw.trim()){d.err="請先貼上 JSON 或選擇檔案。";renderModal();return;}
+      var arr;
+      try{arr=JSON.parse(raw);}catch(e){d.text=raw;d.err="JSON 格式有誤，無法解析："+e.message;renderModal();return;}
+      if(!Array.isArray(arr)){d.text=raw;d.err="格式需要是一個陣列 [ ... ]。";renderModal();return;}
+      d.text=raw;d.parsed=impCustPreview(arr);d.err="";renderModal();return;
+    }
+    var add=d.parsed.add;
+    if(!add.length){S.modal=null;renderModal();render();showToast("沒有新的客戶需要匯入",null);return;}
+    var created=[];
+    add.forEach(function(r){
+      var c={id:uid(),createdAt:todayISO(),name:String(r.name).trim(),
+        type:String(r.type||r.country||"").trim(),status:"潛在客戶",
+        rating:(["A","B","C"].indexOf(String(r.grade||"").toUpperCase())>=0?String(r.grade).toUpperCase():""),
+        website:String(r.website||"").trim(),background:String(r.background||"").trim(),
+        relationship:String(r.relationship||"").trim(),
+        contacts:(r.contacts||[]).map(function(ct){return {id:uid(),name:String(ct.name||""),title:String(ct.title||""),
+          email:String(ct.email||""),phone:String(ct.phone||""),note:String(ct.note||"")};}),
+        cards:[],projects:[],orders:[]};
+      S.data.customers.push(c);created.push(c.id);
+    });
+    S.data=normalize(S.data);
+    S.modal=null;S.view="customers";S.filter="all";
+    save();render();window.scrollTo(0,0);
+    showToast("已匯入 "+created.length+" 筆潛在客戶",function(){
+      S.data.customers=S.data.customers.filter(function(c){return created.indexOf(c.id)<0;});
+    });
+    return;
+  }
   else if(m.type==="pitchlog"){
     if(!(d.note||"").trim()){alert("請寫一下這次跟進的內容。");return;}
     var pl=(S.data.pitches||[]).filter(function(x){return x.id===d.piid;})[0];
@@ -2999,6 +3095,7 @@ function saveModal(){
 /* hold 自訂日期：select 後關閉 picker，等按確定。改為按鈕直接套用 */
 document.addEventListener("input",function(e){
   if(e.target.id==="hold_date"){/* 等使用者按確定 */}
+  if(e.target.id==="imp_text"){if(S.modal&&S.modal.draft)S.modal.draft.text=e.target.value;return;}
   if(e.target.id==="oq"){
     S.oq=e.target.value;var caret=e.target.selectionStart;render();
     var again=document.getElementById("oq");
@@ -3130,7 +3227,8 @@ function toggleMenu(){
   pop.innerHTML='<button data-m="jexport">'+icon("box",15)+' 匯出備份 (JSON)</button>'+
     '<button data-m="jimport">'+icon("box",15)+' 匯入備份</button>'+
     '<button data-m="csv">'+icon("copy",15)+' 匯出 Excel (CSV)</button>'+
-    '<button data-m="ocsv">'+icon("dollar",15)+' 匯出訂單 (CSV)</button>';
+    '<button data-m="ocsv">'+icon("dollar",15)+' 匯出訂單 (CSV)</button>'+
+    '<button data-m="impcust">'+icon("user",15)+' 匯入潛在客戶名單</button>';
   pop.style.display="block";
   pop.querySelectorAll("button").forEach(function(b){b.onclick=function(){pop.style.display="none";menuAct(b.getAttribute("data-m"));};});
 }
@@ -3139,6 +3237,7 @@ function menuAct(m){
   else if(m==="jimport"){var inp=document.createElement("input");inp.type="file";inp.accept="application/json";inp.onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){try{var o=JSON.parse(ev.target.result);if(o&&Array.isArray(o.customers)){S.data=normalize(o);save();S.view="dashboard";render();}else alert("格式不符。");}catch(x){alert("無法讀取。");}};r.readAsText(f);};inp.click();}
   else if(m==="csv")exportCSV();
   else if(m==="ocsv")exportOrdersCSV();
+  else if(m==="impcust"){S.modal={type:"impcust",draft:{}};renderModal();}
   else if(m==="weekly"){S.view="weekly";render();}
 }
 function exportCSV(){
