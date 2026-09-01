@@ -484,6 +484,10 @@ body.colresizing .oin{pointer-events:none}
 .impRow.skip{color:var(--muted)}
 .impTag{font-size:10.5px;font-weight:700;background:#F1F0EA;color:#6b6680;border-radius:6px;padding:1px 6px}
 .impTag.g{background:var(--grl);color:#357B50}
+.impTag.dup{background:#FBE9ED;color:#C23A55;font-weight:700}
+.impRow.dupRow{background:rgba(251,233,237,.5)}
+.wavesel{width:auto;max-width:320px;margin:2px 0 0;padding:4px 10px;font-size:12.5px;display:inline-block}
+.wchip.ok{background:var(--grl);border-color:#C6E4D2;color:#357B50}
 /* 推廣跟進 */
 .fuwrap{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .fubtn{font-size:11px;font-weight:700;color:var(--violet);background:var(--violet-soft);border-radius:8px;padding:3px 8px;white-space:nowrap}
@@ -920,7 +924,7 @@ function normalize(d){
 }
 
 /* ===================== 狀態 ===================== */
-var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:"",oq:"",oyear:"",pitchOpen:{}};
+var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:"",oq:"",oyear:"",pitchOpen:{},waveProd:""};
 
 function load(){try{var r=localStorage.getItem(KEY);if(r){S.data=normalize(JSON.parse(r));return;}}catch(e){}S.data=normalize(seed());save();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S.data));var s=document.getElementById("saved");s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1100);}catch(e){console.error(e);}}
@@ -1681,27 +1685,39 @@ function partByEl(el){return (S.data.partReqs||[]).filter(function(p){return p.i
 /* ---------- 推廣 / 開發（推薦新產品給客戶） ---------- */
 /* 「這一波該發給誰」：從沒推過的 + 距上次已滿一個週期的 */
 function pitchWavePanel(){
-  var w=pitchWaveLists();
+  var prod=S.waveProd||"";
+  var w=pitchWaveLists(null,prod);
   var total=w.never.length+w.due.length;
-  var h='<div class="wavebox"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-    '<div><b style="font-size:15px">📮 這一波該發給誰 <span class="count">'+total+'</span></b>'+
-    '<div class="muted" style="font-size:12px;margin-top:2px">每 <input class="oin cycin" id="pcycle" type="number" min="1" max="365" value="'+w.days+'"> 天一波：從沒推過的，加上距上次接觸已滿 '+w.days+' 天、還沒收尾的</div></div>';
+  var prods=allPitchProducts();
+  var byProd=!!prod;
+  var sel='<select class="inp wavesel" data-action="wave-prod"><option value="">— 全部產品（只看時間）—</option>'+
+    prods.map(function(x){return '<option value="'+esc(x.name)+'"'+(normProduct(x.name)===normProduct(prod)?" selected":"")+'>'+esc(x.name)+'（推過 '+x.n+' 家）</option>';}).join("")+'</select>';
+  var h='<div class="wavebox"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'+
+    '<div style="min-width:0"><b style="font-size:15px">📮 這一波該發給誰 <span class="count">'+total+'</span></b>'+
+    '<div class="muted" style="font-size:12px;margin-top:3px">要推哪個產品？'+sel+'</div>'+
+    '<div class="muted" style="font-size:12px;margin-top:4px">每 <input class="oin cycin" id="pcycle" type="number" min="1" max="365" value="'+w.days+'"> 天一波・'+
+      (byProd?('只看「<b>'+esc(prod)+'</b>」：沒推過這個產品的，加上推過但已滿 '+w.days+' 天還沒收尾的')
+             :('從沒推過任何產品的，加上距上次接觸已滿 '+w.days+' 天、還沒收尾的'))+'</div></div>';
   h+='<div class="row" style="gap:6px;flex:none">'+
     (total?'<button class="btn-soft" data-action="copy-wave-emails" style="padding:6px 12px">📋 複製全部 email（'+custEmails(w.never.concat(w.due)).length+'）</button>':"")+
     (total?'<button class="btn-dark" data-action="bulk-pitch" data-preset="wave" style="padding:6px 12px">📤 對這些人群發</button>':"")+'</div></div>';
-  if(!total)return h+'<div class="muted" style="font-size:13px;margin-top:8px">目前沒有人到期，等下一個週期。</div></div>';
-  function chip(x,sub){return '<span class="wchip" title="'+esc(sub)+'">'+esc(x)+'</span>';}
-  if(w.never.length){
-    h+='<div class="wgrp"><div class="wglbl">🆕 從沒推過（'+w.never.length+'）'+
-      '<button class="qb" data-action="copy-wave-emails" data-grp="never" style="padding:1px 8px;margin-left:6px">複製 email</button></div>'+
-      '<div class="wlist">'+w.never.slice(0,60).map(function(x){return chip(x.c.name,"從未推廣");}).join("")+
-      (w.never.length>60?('<span class="wchip more">…還有 '+(w.never.length-60)+' 家</span>'):"")+'</div></div>';
+  function chip(x,sub,cls){return '<span class="wchip'+(cls?" "+cls:"")+'" title="'+esc(sub)+'">'+esc(x)+'</span>';}
+  function grp(label,list,gk,fmt,tip){
+    if(!list.length)return "";
+    return '<div class="wgrp"><div class="wglbl">'+label.replace("</button>","</button>")+'（'+list.length+'）'+
+      (gk?'<button class="qb" data-action="copy-wave-emails" data-grp="'+gk+'" style="padding:1px 8px;margin-left:6px">複製 email</button>':"")+'</div>'+
+      '<div class="wlist">'+list.slice(0,60).map(fmt).join("")+
+      (list.length>60?('<span class="wchip more">…還有 '+(list.length-60)+' 家</span>'):"")+'</div></div>';
   }
-  if(w.due.length){
-    h+='<div class="wgrp"><div class="wglbl">⏰ 該追了（'+w.due.length+'）'+
-      '<button class="qb" data-action="copy-wave-emails" data-grp="due" style="padding:1px 8px;margin-left:6px">複製 email</button></div>'+
-      '<div class="wlist">'+w.due.slice(0,60).map(function(x){return chip(x.c.name+' · '+x.gap+'天',"上次接觸 "+(x.last||"—"));}).join("")+
-      (w.due.length>60?('<span class="wchip more">…還有 '+(w.due.length-60)+' 家</span>'):"")+'</div></div>';
+  if(!total&&!w.waiting.length)return h+'<div class="muted" style="font-size:13px;margin-top:8px">目前沒有人到期，等下一個週期。</div></div>';
+  h+=grp((byProd?'🆕 還沒推過這個產品':'🆕 從沒推過')+
+      '<button class="qb" data-action="bulk-pitch" data-preset="never" style="padding:1px 8px;margin-left:6px;border-color:#D8DDF5;color:var(--violet)">📤 對這批群發推廣</button>',
+    w.never,"never",function(x){return chip(x.c.name,byProd?("還沒推過 "+prod):"從未推廣");});
+  h+=grp((byProd?'⏰ 推過這個產品、該追了':'⏰ 該追了')+
+      '<button class="qb" data-action="bulk-log" data-preset="due" style="padding:1px 8px;margin-left:6px;border-color:#D8DDF5;color:var(--violet)">✍️ 對這批群發跟進</button>',
+    w.due,"due",function(x){return chip(x.c.name+' · '+x.gap+'天',"上次接觸 "+(x.last||"—"));});
+  if(byProd&&w.waiting.length){
+    h+=grp('✅ 剛推過、還在等回覆（先別再發）',w.waiting,"",function(x){return chip(x.c.name+' · '+x.gap+'天',"上次接觸 "+(x.last||"—"),"ok");});
   }
   return h+'</div>';
 }
@@ -1825,18 +1841,54 @@ function custPitchMap(){
   return m;
 }
 /* 分成「從沒推過」與「距上次已滿 N 天、還沒收尾」兩批 */
-function pitchWaveLists(days){
+/* 產品名稱比對用（去空白、大小寫、全半形差異） */
+function normProduct(x){return String(x||"").trim().toLowerCase().replace(/\s+/g,"");}
+/* 系統裡推廣過的所有產品，依推過的筆數多到少 */
+function allPitchProducts(){
+  var m={};
+  (S.data.pitches||[]).forEach(function(p){
+    var k=normProduct(p.product);if(!k)return;
+    if(!m[k])m[k]={name:(p.product||"").trim(),n:0};
+    m[k].n++;
+  });
+  return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return b.n-a.n;});
+}
+/* 這個客戶推過的產品（正規化後） */
+function custPitchedProducts(cid){
+  var out={};
+  (S.data.pitches||[]).forEach(function(p){
+    if(p.customer!==cid)return;
+    var k=normProduct(p.product);if(k)out[k]=p;
+  });
+  return out;
+}
+/* 波次名單。prod 有值＝只看這個產品：
+   fresh＝這個產品還沒推過的、due＝推過這產品但該追了、waiting＝剛推過還在等 */
+function pitchWaveLists(days,prod){
   days=days||pitchCycleDays();
-  var m=custPitchMap(),never=[],due=[];
+  var key=normProduct(prod);
+  var m=custPitchMap(),never=[],due=[],waiting=[];
   S.data.customers.forEach(function(c){
     var e=m[c.id];
-    if(!e||!e.n){never.push({c:c});return;}
-    if(!e.live)return;
-    var gap=e.last?daysSince(e.last):9999;
-    if(gap>=days)due.push({c:c,last:e.last,gap:gap,pitches:e.pitches.filter(pitchLive)});
+    if(!key){
+      if(!e||!e.n){never.push({c:c});return;}
+      if(!e.live)return;
+      var gap=e.last?daysSince(e.last):9999;
+      if(gap>=days)due.push({c:c,last:e.last,gap:gap,pitches:e.pitches.filter(pitchLive)});
+      return;
+    }
+    // 指定產品：只看這個客戶有沒有推過「這個」產品
+    var mine=(e&&e.pitches||[]).filter(function(p){return normProduct(p.product)===key;});
+    if(!mine.length){never.push({c:c});return;}
+    var liveOnes=mine.filter(pitchLive);
+    if(!liveOnes.length)return;                       // 這個產品已收尾（無需求／成交）
+    var last="";liveOnes.forEach(function(p){var t=pitchLastTouch(p);if(t>last)last=t;});
+    var g=last?daysSince(last):9999;
+    if(g>=days)due.push({c:c,last:last,gap:g,pitches:liveOnes});
+    else waiting.push({c:c,last:last,gap:g});
   });
   due.sort(function(a,b){return b.gap-a.gap;});
-  return {never:never,due:due,days:days};
+  return {never:never,due:due,waiting:waiting,days:days,prod:(prod||"").trim()};
 }
 function custEmails(list){
   var out=[];
@@ -2572,46 +2624,70 @@ function impCustPreview(list){
 /* ── 群發推廣：一次幫一批客戶各建一筆推廣紀錄 ── */
 function bulkPitchModal(d){
   d=d||{};d.sel=d.sel||{};
-  var w=pitchWaveLists();
+  var prod=d.product||"";
+  var w=pitchWaveLists(null,prod);
   var m=custPitchMap();
   var pool=S.data.customers.slice();
   var f=d.filter||"wave";
   var inWave={};w.never.concat(w.due).forEach(function(x){inWave[x.c.id]=true;});
+  // 這個產品「已經推過」的客戶 → 預設不重複發
+  var key=normProduct(prod);
+  var dup={};
+  if(key)(S.data.pitches||[]).forEach(function(p){if(normProduct(p.product)===key&&p.customer)dup[p.customer]=p;});
+  var nDupSel=Object.keys(d.sel).filter(function(k){return d.sel[k]&&dup[k];}).length;
   var shown=pool.filter(function(c){
     if(f==="wave")return !!inWave[c.id];
+    if(f==="fresh")return !dup[c.id];
     if(f==="never")return !(m[c.id]&&m[c.id].n);
     if(f==="potential")return c.status==="潛在客戶";
     if(f==="A")return c.rating==="A";
     return true;
   });
   var nSel=Object.keys(d.sel).filter(function(k){return d.sel[k];}).length;
-  var chips=[["wave","這一波該發的",w.never.length+w.due.length],["never","從沒推過",pool.filter(function(c){return !(m[c.id]&&m[c.id].n);}).length],
-    ["potential","潛在客戶",pool.filter(function(c){return c.status==="潛在客戶";}).length],["A","評級 A",pool.filter(function(c){return c.rating==="A";}).length],["all","全部客戶",pool.length]];
+  var chips=[["wave",key?"這一波該發的":"這一波該發的",w.never.length+w.due.length]];
+  if(key)chips.push(["fresh","沒推過「"+prod+"」",pool.filter(function(c){return !dup[c.id];}).length]);
+  chips=chips.concat([["never","從沒推過任何產品",pool.filter(function(c){return !(m[c.id]&&m[c.id].n);}).length],
+    ["potential","潛在客戶",pool.filter(function(c){return c.status==="潛在客戶";}).length],
+    ["A","評級 A",pool.filter(function(c){return c.rating==="A";}).length],["all","全部客戶",pool.length]]);
+  var prods=allPitchProducts();
+  var dl='<datalist id="bp_prodlist">'+prods.map(function(x){return '<option value="'+esc(x.name)+'">';}).join("")+'</datalist>';
+  var warn=key
+    ? (nDupSel
+        ? '<div class="pasteWarn">⚠️ 你選的客戶裡有 <b>'+nDupSel+'</b> 家<b>已經推過「'+esc(prod)+'」</b>。送出時會<b>自動略過</b>他們，不會重複推薦（除非你勾下面的允許重複）。</div>'
+        : '<div class="pasteOk">✓ 目前選到的客戶都<b>沒有推過「'+esc(prod)+'」</b>，不會重複推薦。系統中共有 '+Object.keys(dup).length+' 家推過這個產品。</div>')
+    : '<div class="pasteHint">先填「推薦產品」，系統就會自動比對<b>誰已經推過這個產品</b>並排除，避免重複推薦。</div>';
   var body='<div class="pasteHint">選一批客戶，一次幫他們<b>各建立一筆推廣紀錄</b>（同樣的主旨與產品）。之後客戶回覆了再各自改結果就好。</div>'+
     '<div class="two">'+fld("推薦日期",'<input class="inp" type="date" id="bp_date" value="'+esc(d.date||todayISO())+'">')+
       fld("下次跟進日（預設 "+pitchCycleDays()+" 天後）",'<input class="inp" type="date" id="bp_next" value="'+esc(d.next||new Date(Date.now()+pitchCycleDays()*86400000).toISOString().slice(0,10))+'">')+'</div>'+
     fld("郵件主旨",'<input class="inp" id="bp_subject" value="'+esc(d.subject||"")+'" placeholder="例：COMART | New MagSafe Car Mount Series">')+
-    fld("推薦產品 *",'<input class="inp" id="bp_product" value="'+esc(d.product||"")+'" placeholder="例：磁吸車用支架系列">')+
+    fld("推薦產品 *（打完按一下空白處，下面會即時比對）",'<input class="inp" id="bp_product" list="bp_prodlist" value="'+esc(prod)+'" placeholder="例：磁吸車用支架系列">'+dl)+
+    warn+
+    (key?'<label class="repeat" style="cursor:pointer"><input type="checkbox" id="bp_dupok"'+(d.dupok?" checked":"")+' style="width:15px;height:15px"><span class="grow">允許重複推薦同一個產品（我就是要再推一次）</span></label>':"")+
     '<div><div class="lbl2" style="font-size:12px;margin-bottom:4px">選收件對象</div>'+
     '<div class="row" style="gap:5px;margin-bottom:6px">'+chips.map(function(c){
-      return '<button class="tab'+(f===c[0]?" on":"")+'" data-action="bp-filter" data-f="'+c[0]+'" style="font-size:12px;padding:3px 10px">'+c[1]+' '+c[2]+'</button>';}).join("")+'</div>'+
+      return '<button class="tab'+(f===c[0]?" on":"")+'" data-action="bp-filter" data-f="'+c[0]+'" style="font-size:12px;padding:3px 10px">'+esc(c[1])+' '+c[2]+'</button>';}).join("")+'</div>'+
     '<div class="row" style="gap:6px;margin-bottom:6px"><button class="qb" data-action="bp-all">全選這批（'+shown.length+'）</button>'+
       '<button class="qb" data-action="bp-none">清除選取</button>'+
-      '<span class="muted" style="font-size:12px;margin-left:auto">已選 <b>'+nSel+'</b> 家</span></div>'+
+      (key&&nDupSel?'<button class="qb" data-action="bp-dropdup" style="border-color:#F2D7DD;color:#C23A55">取消已推過的 '+nDupSel+' 家</button>':"")+
+      '<span class="muted" style="font-size:12px;margin-left:auto">已選 <b>'+nSel+'</b> 家'+(nDupSel?('（'+nDupSel+' 家重複）'):"")+'</span></div>'+
     '<div class="impList">'+(shown.length?shown.map(function(c){
       var e=m[c.id],sub=e&&e.n?('推過 '+e.n+' 次・上次 '+(e.last||"—")):'從未推廣';
       var em=(c.contacts||[]).filter(function(x){return x.email;}).length;
-      return '<label class="impRow" style="cursor:pointer"><input type="checkbox" data-action="bp-tog" data-cid="'+c.id+'"'+(d.sel[c.id]?" checked":"")+' style="width:15px;height:15px">'+
+      var isDup=!!dup[c.id];
+      return '<label class="impRow'+(isDup?" dupRow":"")+'" style="cursor:pointer"><input type="checkbox" data-action="bp-tog" data-cid="'+c.id+'"'+(d.sel[c.id]?" checked":"")+' style="width:15px;height:15px">'+
         '<b>'+esc(c.name)+'</b>'+(c.rating?'<span class="impTag g">'+esc(c.rating)+'</span>':"")+
+        (isDup?'<span class="impTag dup">已推過「'+esc(prod)+'」'+esc(dup[c.id].date||"")+'</span>':'')+
         '<span class="impTag">'+esc(sub)+'</span>'+(em?'':'<span class="impTag" style="background:#FBE9ED;color:#C23A55">無 email</span>')+'</label>';
     }).join(""):'<div class="muted" style="font-size:13px;padding:8px">這個條件下沒有客戶。</div>')+'</div></div>';
-  return shell("群發推廣",body,nSel?("建立 "+nSel+" 筆推廣"):"請先選客戶");
+  var willMake=nSel-((key&&!d.dupok)?nDupSel:0);
+  return shell("群發推廣",body,willMake>0?("建立 "+willMake+" 筆推廣"):(nSel?"全部都重複，沒有可建立的":"請先選客戶"));
 }
 /* ── 群發跟進：一次幫一批推廣加上同樣的跟進紀錄 ── */
 function bulkLogModal(d){
   d=d||{};d.sel=d.sel||{};
   var days=pitchCycleDays();
-  var live=(S.data.pitches||[]).filter(pitchLive);
+  var lk=normProduct(d.prod);
+  var live=(S.data.pitches||[]).filter(function(p){return pitchLive(p)&&(!lk||normProduct(p.product)===lk);});
   var f=d.filter||"due";
   var shown=live.filter(function(p){
     if(f==="due")return daysSince(pitchLastTouch(p))>=days;
@@ -2623,7 +2699,8 @@ function bulkLogModal(d){
   var chips=[["due","距上次滿 "+days+" 天",live.filter(function(p){return daysSince(pitchLastTouch(p))>=days;}).length],
     ["wait","待回覆",live.filter(function(p){return p.status==="待回覆";}).length],["all","全部未收尾",live.length]];
   var stSel='<select class="inp" id="bl_status"><option value="">不改結果</option>'+PITCH_STATUS.map(function(x){return '<option'+(d.status===x?" selected":"")+'>'+x+'</option>';}).join("")+'</select>';
-  var body='<div class="pasteHint">發完第二封（或第三封）之後，用這裡<b>一次把跟進紀錄加到多筆推廣上</b>，並順便把「下次跟進」往後排。</div>'+
+  var body='<div class="pasteHint">發完第二封（或第三封）之後，用這裡<b>一次把跟進紀錄加到多筆推廣上</b>，並順便把「下次跟進」往後排。'+
+      (d.prod?('<br>目前只列出「<b>'+esc(d.prod)+'</b>」這個產品的推廣紀錄。'):"")+'</div>'+
     '<div class="two">'+fld("這次跟進的日期",'<input class="inp" type="date" id="bl_date" value="'+esc(d.date||todayISO())+'">')+
       fld("下次再追（預設 "+days+" 天後）",'<input class="inp" type="date" id="bl_next" value="'+esc(d.next||new Date(Date.now()+days*86400000).toISOString().slice(0,10))+'">')+'</div>'+
     fld("這次做了什麼 *",'<textarea class="inp" id="bl_note" rows="2" placeholder="例：第二次跟進，寄新品型錄並詢問是否有需求">'+esc(d.note||"")+'</textarea>')+
@@ -2751,7 +2828,8 @@ function readModal(){
   else if(m.type==="update")Object.assign(d,{date:rv("u_date"),note:rv("u_note"),thread:(document.getElementById("u_thread")?rv("u_thread"):(d.thread||""))});
   else if(m.type==="quote")Object.assign(d,{product:rv("q_prod"),currency:rv("q_cur"),quoteDate:rv("q_date"),validUntil:rv("q_valid"),note:rv("q_note")});
   else if(m.type==="sample")Object.assign(d,{item:rv("s_item"),qty:rv("s_qty"),shipDate:rv("s_ship"),status:rv("s_status"),courier:rv("s_courier"),tracking:rv("s_track"),feeType:rv("s_fee"),feeStatus:rv("s_feest"),feeCustom:rv("s_feecustom"),feedback:rv("s_fb")});
-  else if(m.type==="bulkpitch")Object.assign(d,{date:rv("bp_date"),next:rv("bp_next"),subject:rv("bp_subject"),product:rv("bp_product")});
+  else if(m.type==="bulkpitch"){Object.assign(d,{date:rv("bp_date"),next:rv("bp_next"),subject:rv("bp_subject"),product:rv("bp_product")});
+    var dok=document.getElementById("bp_dupok");if(dok)d.dupok=dok.checked;}
   else if(m.type==="bulklog")Object.assign(d,{date:rv("bl_date"),next:rv("bl_next"),note:rv("bl_note"),status:rv("bl_status")});
   else if(m.type==="pitchlog")Object.assign(d,{date:rv("pl_date"),next:rv("pl_next"),note:rv("pl_note"),status:rv("pl_status")});
   else if(m.type==="note")Object.assign(d,{title:rv("n_title"),content:rv("n_content"),scope:rv("n_scope")});
@@ -2909,14 +2987,25 @@ document.addEventListener("click",function(e){
   if(a==="add-pitch"){if(!Array.isArray(S.data.pitches))S.data.pitches=[];var npi={id:uid(),createdAt:todayISO(),date:todayISO(),customer:t.getAttribute("data-cid")||"",product:"",subject:"",feedback:"",followUp:"",status:"待回覆"};S.data.pitches.unshift(npi);save();render();var pfe=document.querySelector('.oin[data-piid="'+npi.id+'"][data-ptf="product"]');if(pfe){pfe.focus();pfe.scrollIntoView({block:"center",behavior:"smooth"});}return;}
   if(a==="del-pitch"){var piarr=S.data.pitches,pio=piarr.filter(function(x){return x.id===t.getAttribute("data-piid");})[0],piidx=piarr.indexOf(pio);softDelete("已刪除一筆推廣紀錄",function(){piarr.splice(piidx,1);},function(){piarr.splice(Math.min(piidx,piarr.length),0,pio);});return;}
   if(a==="bulk-pitch"){
-    var pre={};
-    if(t.getAttribute("data-preset")==="wave"){var w0=pitchWaveLists();w0.never.concat(w0.due).forEach(function(x){pre[x.c.id]=true;});}
-    S.modal={type:"bulkpitch",draft:{date:todayISO(),sel:pre,filter:"wave"}};renderModal();return;
+    var pre={},pprod="";
+    var bpre=t.getAttribute("data-preset");
+    if(bpre==="wave"||bpre==="never"){
+      pprod=S.waveProd||"";
+      var w0=pitchWaveLists(null,pprod);
+      var src0=(bpre==="never")?w0.never:w0.never.concat(w0.due);
+      src0.forEach(function(x){pre[x.c.id]=true;});
+    }
+    S.modal={type:"bulkpitch",draft:{date:todayISO(),sel:pre,filter:"wave",product:pprod}};renderModal();return;
   }
   if(a==="bulk-log"){
-    var d0=pitchCycleDays(),pre2={};
-    (S.data.pitches||[]).forEach(function(p){if(pitchLive(p)&&daysSince(pitchLastTouch(p))>=d0)pre2[p.id]=true;});
-    S.modal={type:"bulklog",draft:{date:todayISO(),sel:pre2,filter:"due"}};renderModal();return;
+    var d0=pitchCycleDays(),pre2={},lprod=(t.getAttribute("data-preset")==="due")?(S.waveProd||""):"";
+    var lkey=normProduct(lprod);
+    (S.data.pitches||[]).forEach(function(p){
+      if(!pitchLive(p))return;
+      if(lkey&&normProduct(p.product)!==lkey)return;
+      if(daysSince(pitchLastTouch(p))>=d0)pre2[p.id]=true;
+    });
+    S.modal={type:"bulklog",draft:{date:todayISO(),sel:pre2,filter:"due",prod:lprod}};renderModal();return;
   }
   if(a==="bp-filter"){readModal();S.modal.draft.filter=t.getAttribute("data-f");renderModal();return;}
   if(a==="bl-filter"){readModal();S.modal.draft.filter=t.getAttribute("data-f");renderModal();return;}
@@ -2927,6 +3016,11 @@ document.addEventListener("click",function(e){
     renderModal();return;
   }
   if(a==="bp-none"||a==="bl-none"){readModal();S.modal.draft.sel={};renderModal();return;}
+  if(a==="bp-dropdup"){
+    readModal();var dk=normProduct(S.modal.draft.product);
+    if(dk)(S.data.pitches||[]).forEach(function(p){if(normProduct(p.product)===dk&&p.customer)S.modal.draft.sel[p.customer]=false;});
+    renderModal();return;
+  }
   if(a==="copy-wave-emails"){
     var w1=pitchWaveLists(),grp=t.getAttribute("data-grp");
     var src=grp==="never"?w1.never:(grp==="due"?w1.due:w1.never.concat(w1.due));
@@ -2936,6 +3030,7 @@ document.addEventListener("click",function(e){
     var ot=t.textContent;t.textContent="已複製 "+mails.length+" 個 ✓";
     setTimeout(function(){t.textContent=ot;},1600);return;
   }
+  if(a==="wave-prod"){return;}
   if(a==="pitchfilter"){S.filter=t.getAttribute("data-f");render();return;}
   if(a==="import-quote"){S.modal={type:"importq",draft:{}};renderModal();return;}
   if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
@@ -3125,6 +3220,10 @@ document.addEventListener("change",function(e){
     if(lbl2){var n2=Object.keys(S.modal.draft.sel).filter(function(k){return S.modal.draft.sel[k];}).length;
       lbl2.textContent=n2?("加到 "+n2+" 筆"):"請先選推廣";}
     return;}
+  var wp=e.target.closest('[data-action="wave-prod"]');
+  if(wp){S.waveProd=wp.value;render();return;}
+  if(e.target.id==="bp_product"&&S.modal&&S.modal.draft){readModal();renderModal();return;}
+  if(e.target.id==="bp_dupok"&&S.modal&&S.modal.draft){S.modal.draft.dupok=e.target.checked;renderModal();return;}
   if(e.target.id==="pcycle"){
     var v=parseInt(e.target.value,10);
     if(v>0&&v<=365){S.data.settings.pitchCycleDays=v;save();render();}
@@ -3244,6 +3343,12 @@ function saveModal(){
     if(!ids.length){alert("請先選要發的客戶。");return;}
     if(!(d.product||"").trim()){alert("請填推薦產品（之後才看得出這一波推了什麼）。");return;}
     if(!Array.isArray(S.data.pitches))S.data.pitches=[];
+    // 已經推過同一個產品的，預設略過，避免重複推薦
+    var bkey=normProduct(d.product),bdup={};
+    if(bkey&&!d.dupok)S.data.pitches.forEach(function(p){if(normProduct(p.product)===bkey&&p.customer)bdup[p.customer]=true;});
+    var skipped=ids.filter(function(cid){return bdup[cid];}).length;
+    ids=ids.filter(function(cid){return !bdup[cid];});
+    if(!ids.length){alert("你選的客戶都已經推過「"+d.product+"」了。\n\n要再推一次的話，請勾選「允許重複推薦同一個產品」。");return;}
     var made=[];
     ids.forEach(function(cid){
       var np={id:uid(),createdAt:todayISO(),date:d.date||todayISO(),customer:cid,
@@ -3251,7 +3356,7 @@ function saveModal(){
       S.data.pitches.unshift(np);made.push(np.id);
     });
     S.modal=null;S.view="pitches";S.filter="all";save();renderModal();render();window.scrollTo(0,0);
-    showToast("已建立 "+made.length+" 筆推廣紀錄",function(){
+    showToast("已建立 "+made.length+" 筆推廣紀錄"+(skipped?("，略過 "+skipped+" 家已推過的"):""),function(){
       S.data.pitches=S.data.pitches.filter(function(p){return made.indexOf(p.id)<0;});});
     return;
   }
