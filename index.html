@@ -1052,6 +1052,10 @@ function render(){
   }
 }
 function renderInner(){
+  // 重畫會整塊換掉 #view 的 HTML，內容瞬間變矮，瀏覽器就把捲軸拉回最上面。
+  // 先記住捲動位置，畫完再放回去；真的要跳頁的地方（nav / 開啟客戶）會在
+  // render() 之後自己呼叫 scrollTo，蓋掉這個還原。
+  var keepY=window.scrollY||window.pageYOffset||0;
   renderNav();updateBackupBtn();
   var vw=document.getElementById("view");if(vw){vw.classList.remove("vin");void vw.offsetWidth;vw.classList.add("vin");}
   var v=S.view,h="";
@@ -1067,6 +1071,7 @@ function renderInner(){
   else if(v==="quotes")h=renderQuotes();
   else if(v==="weekly")h=renderWeekly();
   document.getElementById("view").innerHTML=h;
+  if(keepY)window.scrollTo(0,keepY);
 }
 
 /* ---------- 中控台 ---------- */
