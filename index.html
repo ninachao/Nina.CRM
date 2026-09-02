@@ -469,6 +469,37 @@ body.colresizing .oin{pointer-events:none}
 .pkv{display:flex;flex-direction:column;gap:1px;background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
 .pkv span{font-size:10.5px;color:var(--muted);font-weight:700}
 .pkv b{font-size:13px;font-family:monospace;word-break:break-all}
+/* 客戶：條列檢視 */
+.vtoggle{display:inline-flex;background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:10px;padding:2px;gap:2px;flex:none}
+.vtoggle button{font-size:12.5px;font-weight:700;color:var(--muted);padding:5px 11px;border-radius:8px;white-space:nowrap}
+.vtoggle button.on{background:var(--ink);color:#fff}
+.clist{display:flex;flex-direction:column;gap:6px}
+.crow{display:grid;grid-template-columns:34px minmax(0,1fr) 116px 90px minmax(0,150px) 74px;align-items:center;gap:10px;
+  background:rgba(255,255,255,.62);backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15);
+  border:1px solid rgba(255,255,255,.75);border-radius:13px;padding:9px 13px;box-shadow:0 2px 10px rgba(90,70,80,.06);
+  cursor:pointer;transition:.12s}
+.crow:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(90,70,80,.11)}
+.crow[draggable="true"]:active{cursor:grabbing}
+.crow.dropmark{box-shadow:0 0 0 2px var(--violet)}
+.crrate{text-align:center;font-size:11.5px;padding:2px 0}
+.crname{min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.crname .cname{font-size:14px}
+.crname .ctype{flex-basis:100%;font-size:11.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crbits{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
+.crrev{min-width:0;display:flex;justify-content:flex-end}
+.crrev .revchip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crlast{font-size:11.5px;color:var(--muted);text-align:right;white-space:nowrap}
+@media(max-width:900px){
+  .crow{grid-template-columns:30px minmax(0,1fr) 108px;row-gap:6px}
+  .crbits,.crrev,.crlast{grid-column:2/4;justify-content:flex-start;text-align:left}
+}
+/* 列表上直接改狀態的下拉 */
+.cstatussel{font-size:11.5px;font-weight:700;border:none;border-radius:999px;padding:3px 22px 3px 10px;cursor:pointer;
+  appearance:none;-webkit-appearance:none;max-width:100%;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='3' stroke-linecap='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 7px center}
+.cstatussel:hover{filter:brightness(.97)}
+.cstatussel.sm{width:100%}
 /* 推廣波次 */
 .wavebox{background:rgba(255,255,255,.62);backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15);border:1px solid rgba(255,255,255,.75);border-radius:16px;padding:14px 16px;box-shadow:0 2px 10px rgba(90,70,80,.06);margin:14px 0 4px}
 .cycin{width:52px;display:inline-block;text-align:center;border:1px solid var(--line);background:#fff;padding:1px 4px;font-weight:700}
@@ -924,7 +955,7 @@ function normalize(d){
 }
 
 /* ===================== 狀態 ===================== */
-var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:"",oq:"",oyear:"",pitchOpen:{},waveProd:""};
+var S={data:null,view:"dashboard",selectedId:null,query:"",filter:"all",modal:null,projTab:{},tlFilter:{},projOpen:{},toast:null,toastTimer:null,dragP:null,dragC:null,todoWeek:null,dragTodo:null,quoteId:null,qcalcOpen:{},orderCollapse:{},bindTodo:null,ocust:"",oq:"",oyear:"",pitchOpen:{},waveProd:"",viewFilter:{},viewScroll:{}};
 
 function load(){try{var r=localStorage.getItem(KEY);if(r){S.data=normalize(JSON.parse(r));return;}}catch(e){}S.data=normalize(seed());save();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S.data));var s=document.getElementById("saved");s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1100);}catch(e){console.error(e);}}
@@ -1116,11 +1147,52 @@ function renderCustomers(){
   var h='<h2 class="sectitle">客戶 <span class="count">'+list.length+'</span></h2>';
   var tabs=[["all","全部",cs.length]];
   customerStatuses().forEach(function(s){tabs.push([s,s,cs.filter(function(c){return c.status===s;}).length]);});
-  h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="cfilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>';
-  h+='<p class="subt" style="margin:-6px 0 14px">小提醒：卡片可以拖曳換順序，把重要的客戶拉到最上面。</p>';
+  var cv=custViewMode();
+  h+='<div class="row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
+    '<div class="tabs" style="margin-bottom:0">'+tabs.map(function(t){return '<button class="tab'+(S.filter===t[0]?" on":"")+'" data-action="cfilter" data-f="'+esc(t[0])+'">'+esc(t[1])+' '+t[2]+'</button>';}).join("")+'</div>'+
+    '<div class="vtoggle"><button class="'+(cv==="list"?"on":"")+'" data-action="custview" data-v="list" title="條列（省空間）">☰ 條列</button>'+
+    '<button class="'+(cv==="card"?"on":"")+'" data-action="custview" data-v="card" title="卡片">▦ 卡片</button></div></div>';
+  h+='<p class="subt" style="margin:8px 0 14px">狀態可以直接在這頁改；拖曳可以換順序，把重要的客戶拉到最上面。</p>';
   if(!list.length)h+='<div class="empty"><div class="big">🗂️</div><p>還沒有客戶，點右上角 ＋ 新增一個吧</p></div>';
+  else if(cv==="list")h+='<div class="clist" id="custgrid">'+list.map(custRow).join("")+'</div>';
   else h+='<div class="grid cards" id="custgrid">'+list.map(custCard).join("")+'</div>';
   return h;
+}
+function custViewMode(){return ((S.data.settings||{}).custView==="card")?"card":"list";}
+/* 客戶狀態下拉：直接在列表上改，不用點進去 */
+function custStatusSel(c,cls){
+  var opts=unionStatuses();if(opts.indexOf(c.status)<0)opts.unshift(c.status||"潛在客戶");
+  return '<select class="cstatussel'+(cls?" "+cls:"")+'" data-action="set-cust-status" data-cid="'+c.id+'" style="'+statusStyle(c.status)+'">'+
+    opts.map(function(x){return '<option'+(x===c.status?" selected":"")+'>'+esc(x)+'</option>';}).join("")+'</select>';
+}
+function statusStyle(st){
+  var i=(S.data.statuses||DEFAULT_STATUSES).indexOf(st);
+  return i<0?"background:#F1F0EA;color:#7c7890":STATUS_PALETTE[i%STATUS_PALETTE.length];
+}
+/* 條列式：一行一家，欄位固定對齊 */
+function custRow(c){
+  var na=(c.projects||[]).filter(function(p){return !p.archived;});
+  var active=na.filter(function(p){return !p.hold&&p.stage!=="已下單";}).length;
+  var held=na.filter(function(p){return p.hold;}).length;
+  var done=na.filter(function(p){return !p.hold&&p.stage==="已下單";}).length;
+  var attention=na.some(function(p){return !p.hold&&(p.stage==="待我處理"||isStale(p)||(p.followUpDate&&p.followUpDate<=todayISO()));});
+  var complaint=na.some(function(p){return p.isComplaint;});
+  var crev=revenueText(custRevenue(c));
+  var last="";na.forEach(function(p){var la=lastAct(p);if(la>last)last=la;});
+  var bits=[];
+  if(active)bits.push('<span class="cstat"><span class="d" style="background:#5E6AD2"></span>'+active+'</span>');
+  if(held)bits.push('<span class="cstat"><span class="d" style="background:#C08A2A"></span>'+held+'</span>');
+  if(done)bits.push('<span class="cstat"><span class="d" style="background:#4E9E6C"></span>'+done+'</span>');
+  return '<div class="crow" draggable="true" data-cid="'+c.id+'" data-action="open" data-id="'+c.id+'" role="button" tabindex="0">'+
+    '<span class="rate crrate" style="'+(RATE_ST[c.rating]||RATE_ST[""])+'">'+(esc(c.rating)||"—")+'</span>'+
+    '<div class="crname"><span class="cname">'+esc(c.name)+'</span>'+(attention?'<span class="dotred"></span>':"")+
+      (complaint?'<span class="flag">客訴</span>':"")+
+      '<div class="ctype">'+esc(c.type||"")+'</div></div>'+
+    '<div class="crstat">'+custStatusSel(c,"sm")+'</div>'+
+    '<div class="crbits">'+(bits.join("")||'<span class="muted" style="font-size:11.5px">尚無事項</span>')+'</div>'+
+    '<div class="crrev">'+(crev?('<span class="revchip">'+icon("dollar",11)+crev+'</span>'):"")+'</div>'+
+    '<div class="crlast">'+(last?esc(rel(last)):'<span class="muted">—</span>')+'</div>'+
+    '</div>';
 }
 function custCard(c){
   var na=(c.projects||[]).filter(function(p){return !p.archived;});
@@ -1131,12 +1203,12 @@ function custCard(c){
   var complaint=na.some(function(p){return p.isComplaint;});
   var rateLabel=c.rating?esc(c.rating):"未評";
   function pill(label,n,color){return n?'<span class="cstat"><span class="d" style="background:'+color+'"></span>'+label+' '+n+'</span>':"";}
-  var h='<button class="pcard" draggable="true" data-action="open" data-id="'+c.id+'" data-cid="'+c.id+'">';
+  var h='<div class="pcard" draggable="true" data-action="open" data-id="'+c.id+'" data-cid="'+c.id+'" role="button" tabindex="0">';
   h+='<div class="ctop"><div class="cmeta">'+
      '<div class="cnamerow"><span class="cname">'+esc(c.name)+'</span>'+(attention?'<span class="dotred"></span>':"")+'</div>'+
      '<div class="ctype">'+esc(c.type||"")+'</div></div>'+
      '<span class="rate" style="'+(RATE_ST[c.rating]||RATE_ST[""])+'">'+rateLabel+'</span></div>';
-  h+='<div class="row"><span class="tag g">'+esc(c.status||"")+'</span>'+
+  h+='<div class="row">'+custStatusSel(c)+
      pill("進行中",active,"#5E6AD2")+pill("hold",held,"#C08A2A")+pill("已下單",done,"#4E9E6C")+
      (complaint?'<span class="flag">客訴</span>':"")+
      (na.length?"":'<span class="cstat">尚無事項</span>')+'</div>';
@@ -1152,7 +1224,7 @@ function custCard(c){
       return '<div class="pvrow"><span class="d" style="background:'+dot+'"></span><span class="pvsubj"'+(p.hold?' style="color:#9b96aa"':'')+'>'+esc(p.customerSubject||"（未命名）")+'</span><span class="pvmeta">'+meta+'</span></div>';
     }).join("")+((na.length>3)?'<div class="pvmore">還有 '+(na.length-3)+' 件…</div>':"")+'</div>';
   }
-  h+='</button>';
+  h+='</div>';
   return h;
 }
 
@@ -2846,12 +2918,24 @@ document.addEventListener("click",function(e){
 
   if(a==="overlay"){return;}
   if(a==="close-modal"){S.modal=null;renderModal();return;}
-  if(a==="nav"){S.view=t.getAttribute("data-view");S.query="";S.filter="all";S.newOrderId=null;S.bindTodo=null;S.quoteId=null;S.ocust="";render();window.scrollTo(0,0);return;}
-  if(a==="open"){e.preventDefault();S.selectedId=id;S.view="detail";S.newOrderId=null;render();window.scrollTo(0,0);return;}
-  if(a==="cfilter"){S.filter=t.getAttribute("data-f");render();return;}
-  if(a==="nfilter"){S.filter=t.getAttribute("data-f");render();return;}
-  if(a==="sfilter"){S.filter=t.getAttribute("data-f");render();return;}
-  if(a==="ofilter"){S.filter=t.getAttribute("data-f");render();return;}
+  if(a==="nav"){
+    var nv=t.getAttribute("data-view");
+    if(S.view!=="detail")S.viewScroll[S.view]=window.scrollY;
+    S.view=nv;S.query="";S.newOrderId=null;S.bindTodo=null;S.quoteId=null;S.ocust="";
+    // 回到清單時把上次的篩選帶回來，不要每次都跳回「全部」
+    S.filter=S.viewFilter[nv]||"all";
+    render();window.scrollTo(0,S.viewScroll[nv]||0);
+    return;
+  }
+  if(a==="open"){e.preventDefault();if(S.view!=="detail")S.viewScroll[S.view]=window.scrollY;S.selectedId=id;S.view="detail";S.newOrderId=null;render();window.scrollTo(0,0);return;}
+  if(a==="custview"){
+    S.data.settings.custView=t.getAttribute("data-v");save();render();return;
+  }
+  if(a==="set-cust-status"){return;}   // 下拉自己處理 change，點擊不要觸發開啟客戶
+  if(a==="cfilter"){S.filter=t.getAttribute("data-f");S.viewFilter[S.view]=S.filter;render();return;}
+  if(a==="nfilter"){S.filter=t.getAttribute("data-f");S.viewFilter[S.view]=S.filter;render();return;}
+  if(a==="sfilter"){S.filter=t.getAttribute("data-f");S.viewFilter[S.view]=S.filter;render();return;}
+  if(a==="ofilter"){S.filter=t.getAttribute("data-f");S.viewFilter[S.view]=S.filter;render();return;}
   if(a==="ocust-only"){S.ocust=t.getAttribute("data-cid")||"";render();window.scrollTo(0,0);return;}
   if(a==="ocust-clear"){S.ocust="";render();return;}
   if(a==="osearch-clear"){S.oq="";render();return;}
@@ -3031,7 +3115,7 @@ document.addEventListener("click",function(e){
     setTimeout(function(){t.textContent=ot;},1600);return;
   }
   if(a==="wave-prod"){return;}
-  if(a==="pitchfilter"){S.filter=t.getAttribute("data-f");render();return;}
+  if(a==="pitchfilter"){S.filter=t.getAttribute("data-f");S.viewFilter[S.view]=S.filter;render();return;}
   if(a==="import-quote"){S.modal={type:"importq",draft:{}};renderModal();return;}
   if(a==="sop-template"){S.modal={type:"sop"};renderModal();return;}
   if(a==="add-sopt"){var sv=document.getElementById("sopt_new").value.trim();if(sv){S.data.settings.orderSop.push(sv);save();renderModal();}return;}
@@ -3220,6 +3304,15 @@ document.addEventListener("change",function(e){
     if(lbl2){var n2=Object.keys(S.modal.draft.sel).filter(function(k){return S.modal.draft.sel[k];}).length;
       lbl2.textContent=n2?("加到 "+n2+" 筆"):"請先選推廣";}
     return;}
+  var css=e.target.closest('[data-action="set-cust-status"]');
+  if(css){
+    var cc=getC(css.getAttribute("data-cid"));
+    if(cc){var was=cc.status;cc.status=css.value;
+      if(S.data.statuses.indexOf(cc.status)<0)S.data.statuses.push(cc.status);
+      save();render();
+      showToast('「'+cc.name+'」改為 '+cc.status,function(){cc.status=was;});}
+    return;
+  }
   var wp=e.target.closest('[data-action="wave-prod"]');
   if(wp){S.waveProd=wp.value;render();return;}
   if(e.target.id==="bp_product"&&S.modal&&S.modal.draft){readModal();setTimeout(renderModal,0);return;}
@@ -3538,16 +3631,16 @@ function reorderCust(dragId,targetId){
   save();render();
 }
 document.addEventListener("dragstart",function(e){
-  var pc=e.target.closest(".pcard[data-cid]");if(pc){S.dragCust=pc.getAttribute("data-cid");e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",S.dragCust);}catch(x){}}
+  var pc=e.target.closest(".pcard[data-cid],.crow[data-cid]");if(pc){S.dragCust=pc.getAttribute("data-cid");e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",S.dragCust);}catch(x){}}
 });
 document.addEventListener("dragover",function(e){
-  var pc=e.target.closest(".pcard[data-cid]");if(pc&&S.dragCust){e.preventDefault();pc.classList.add("dropmark");}
+  var pc=e.target.closest(".pcard[data-cid],.crow[data-cid]");if(pc&&S.dragCust){e.preventDefault();pc.classList.add("dropmark");}
 });
 document.addEventListener("dragleave",function(e){
-  var pc=e.target.closest(".pcard[data-cid]");if(pc)pc.classList.remove("dropmark");
+  var pc=e.target.closest(".pcard[data-cid],.crow[data-cid]");if(pc)pc.classList.remove("dropmark");
 });
 document.addEventListener("drop",function(e){
-  var pc=e.target.closest(".pcard[data-cid]");
+  var pc=e.target.closest(".pcard[data-cid],.crow[data-cid]");
   if(pc&&S.dragCust){e.preventDefault();pc.classList.remove("dropmark");reorderCust(S.dragCust,pc.getAttribute("data-cid"));S.dragCust=null;}
 });
 document.addEventListener("dragend",function(){document.querySelectorAll(".dropmark").forEach(function(el){el.classList.remove("dropmark");});});
