@@ -2540,6 +2540,7 @@ function renderWeekly(){
 function renderModal(){
   var root=document.getElementById("modal-root");var m=S.modal;
   if(!m){root.innerHTML="";return;}
+  var prevSheet=root.querySelector(".sheet");var keepTop=prevSheet?prevSheet.scrollTop:0;
   var b="";
   if(m.type==="customer")b=customerModal(m.draft);
   else if(m.type==="project")b=projectModal(m.draft);
@@ -2561,6 +2562,33 @@ function renderModal(){
   else if(m.type==="ostatus")b=ostatusModal();
   else if(m.type==="qcompany")b=qcompanyModal();
   root.innerHTML='<div class="overlay" data-action="overlay"><div class="sheet">'+b+'</div></div>';
+  if(keepTop){var sh=root.querySelector(".sheet");if(sh)sh.scrollTop=keepTop;}
+  // 第一次畫完後記下「原始內容」，之後才知道使用者有沒有改過東西（關掉前要不要提醒）
+  if(typeof m._snap!=="string")setTimeout(function(){
+    if(S.modal===m&&typeof m._snap!=="string"){try{readModal();}catch(err){}m._snap=draftSig(m.draft);}
+  },0);
+}
+/* 比對彈窗內容有沒有被改過：純粹切換篩選/勾選不算「改過」 */
+var DIRTY_SKIP={filter:1,sel:1,dupok:1,parsed:1};
+function draftSig(d){var o={};Object.keys(d||{}).forEach(function(k){if(!DIRTY_SKIP[k])o[k]=d[k];});
+  try{return JSON.stringify(o);}catch(err){return "";}}
+function modalDirty(){
+  var m=S.modal;if(!m||typeof m._snap!=="string")return false;
+  try{readModal();capturePending(m);}catch(err){return false;}
+  return draftSig(m.draft)!==m._snap;
+}
+/* 關掉彈窗前先確認：不要因為誤觸就把打好的東西整個丟掉 */
+function closeModalSafe(){
+  var m=S.modal;if(!m){renderModal();return;}
+  if(modalDirty()){
+    if(!confirm("這裡有還沒儲存的修改。\n\n按「確定」會丟掉這些修改。\n按「取消」回去繼續編輯（打到一半的聯絡窗口會先幫你加進清單）。")){renderModal();return;}
+  }
+  S.modal=null;renderModal();
+}
+/* 打在「姓名」欄的 email 自動歸位到 email 欄，避免整欄變成一串信箱 */
+function mkContact(n,ti,em,ph,nt){
+  if(!em&&n&&n.indexOf("@")>0&&n.indexOf(" ")<0){em=n;n="";}
+  return {id:uid(),name:n,title:ti,email:em,phone:ph,note:nt};
 }
 function shell(title,body,save){return '<div class="mhead"><h3>'+title+'</h3><button class="iconmini" data-action="close-modal">'+icon("x",16)+'</button></div><div class="mbody">'+body+'</div><div class="mfoot"><button class="btn-ghost" data-action="close-modal">取消</button><button class="btn-dark" data-action="save-modal">'+(save||"儲存")+'</button></div>';}
 function fld(l,inner){return '<label class="fld"><span>'+l+'</span>'+inner+'</label>';}
@@ -2576,7 +2604,7 @@ function customerModal(d){
   var body=fld("客戶名稱 *",'<input class="inp" id="c_name" value="'+esc(d.name)+'" placeholder="例如 Hypercel Corporation">')+
     '<div class="two">'+fld("類型",'<input class="inp" id="c_type" value="'+esc(d.type)+'">')+fld("狀態",statusSel)+'</div>'+
     '<div class="two">'+fld("評級",rateSel)+fld("官網",'<input class="inp" id="c_website" value="'+esc(d.website)+'" placeholder="https://">')+'</div>'+
-    fld("聯絡窗口（可多位）",contacts+'<div class="three" style="grid-template-columns:1fr 1fr;gap:6px"><input class="inp" id="ct_name" placeholder="姓名"><input class="inp" id="ct_title" placeholder="職稱/負責"></div><div class="three" style="grid-template-columns:1fr 1fr auto;gap:6px;margin-top:6px"><input class="inp" id="ct_email" placeholder="email"><input class="inp" id="ct_phone" placeholder="電話"><button class="btn-soft" data-action="add-contact">加入</button></div><input class="inp" id="ct_note" placeholder="備註（選填）" style="margin-top:6px">')+
+    fld("聯絡窗口（可多位）",contacts+'<div class="three" style="grid-template-columns:1fr 1fr;gap:6px"><input class="inp" id="ct_name" placeholder="姓名"><input class="inp" id="ct_title" placeholder="職稱/負責"></div><div class="three" style="grid-template-columns:1fr 1fr auto;gap:6px;margin-top:6px"><input class="inp" id="ct_email" placeholder="email"><input class="inp" id="ct_phone" placeholder="電話"><button class="btn-soft" data-action="add-contact">加入</button></div><input class="inp" id="ct_note" placeholder="備註（選填）" style="margin-top:6px"><div class="muted" style="font-size:11.5px;margin-top:5px">打完按 <b>Enter</b> 或「加入」就換下一位；沒按也沒關係，按「儲存」時會自動幫你加進去。</div>')+
     fld("名片（可多張，自動壓縮）",cards+'<label class="btn-soft" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer">'+icon("img",14)+' 加名片<input type="file" id="c_card" accept="image/*" multiple style="display:none"></label>')+
     fld("背景簡述",'<textarea class="inp" id="c_background" rows="3">'+esc(d.background)+'</textarea>')+
     fld("與 COMART 關係 / 策略",'<textarea class="inp" id="c_relationship" rows="2">'+esc(d.relationship)+'</textarea>');
@@ -2934,7 +2962,7 @@ document.addEventListener("click",function(e){
   var P=function(){return C().projects.filter(function(x){return x.id===pid;})[0];};
 
   if(a==="overlay"){return;}
-  if(a==="close-modal"){S.modal=null;renderModal();return;}
+  if(a==="close-modal"){closeModalSafe();return;}
   if(a==="nav"){
     var nv=t.getAttribute("data-view");
     if(S.view!=="detail")S.viewScroll[S.view]=window.scrollY;
@@ -3194,8 +3222,13 @@ document.addEventListener("click",function(e){
   if(a==="edit-exchange"){S.modal={type:"exchange",draft:{}};renderModal();return;}
 
   // contacts repeaters
-  if(a==="add-contact"){readModal();var n=document.getElementById("ct_name").value.trim();var ti=document.getElementById("ct_title").value.trim();var em=document.getElementById("ct_email").value.trim();var ph=document.getElementById("ct_phone").value.trim();var nt=document.getElementById("ct_note").value.trim();if(n||em||ph){S.modal.draft.contacts=(S.modal.draft.contacts||[]).concat([{id:uid(),name:n,title:ti,email:em,phone:ph,note:nt}]);renderModal();}return;}
-  if(a==="del-contact"){readModal();S.modal.draft.contacts.splice(parseInt(t.getAttribute("data-i"),10),1);renderModal();return;}
+  if(a==="add-contact"){addPendingContact();return;}
+  if(a==="del-contact"){
+    readModal();var dci=parseInt(t.getAttribute("data-i"),10);
+    var gone=(S.modal.draft.contacts||[]).splice(dci,1)[0];renderModal();
+    showToast('已移除窗口「'+((gone&&(gone.name||gone.email))||"窗口")+'」',function(){
+      if(S.modal&&S.modal.draft){readModal();(S.modal.draft.contacts=S.modal.draft.contacts||[]).splice(dci,0,gone);renderModal();}});
+    return;}
   if(a==="add-vcontact"){readModal();var n2=document.getElementById("vt_name").value.trim();var ti2=document.getElementById("vt_title").value.trim();var em2=document.getElementById("vt_email").value.trim();var ph2=document.getElementById("vt_phone").value.trim();var nt2=document.getElementById("vt_note").value.trim();if(n2||em2||ph2){S.modal.draft.contacts=(S.modal.draft.contacts||[]).concat([{id:uid(),name:n2,title:ti2,email:em2,phone:ph2,note:nt2}]);renderModal();}return;}
   if(a==="del-vcontact"){readModal();S.modal.draft.contacts.splice(parseInt(t.getAttribute("data-i"),10),1);renderModal();return;}
   if(a==="copy-contact-email"){var cem=t.getAttribute("data-email");if(cem&&navigator.clipboard){navigator.clipboard.writeText(cem);var oldTxt=t.textContent;t.textContent="已複製 ✓";setTimeout(function(){t.textContent=oldTxt;},1200);}return;}
@@ -3214,6 +3247,9 @@ document.addEventListener("toggle",function(e){
   var dt=e.target;if(dt&&dt.classList&&dt.classList.contains("qcalc")){S.qcalcOpen[dt.getAttribute("data-iid")]=dt.open;}
 },true);
 document.addEventListener("keydown",function(e){
+  // 聯絡窗口：任一欄按 Enter 就直接加入，不用每次都去點「加入」
+  if(e.key==="Enter"&&e.target&&/^(ct|vt)_(name|title|email|phone|note)$/.test(e.target.id||"")&&S.modal){
+    e.preventDefault();addPendingContact();return;}
   var add=e.target.closest("[data-action-enter='todo-add']");
   if(add&&e.key==="Enter"){e.preventDefault();var w=TW(add.getAttribute("data-wid"));var v=add.value.trim();if(w&&v){w.items.push({id:uid(),text:v,done:false,star:false,sub:"",cust:null,steps:[]});save();render();setTimeout(function(){var el=document.getElementById("todo_new");if(el)el.focus();},20);}}
 });
@@ -3407,10 +3443,19 @@ function handleImageUpload(files,field){
   });
 }
 
+/* 把「打到一半」的聯絡窗口加進清單，並把游標送回姓名欄，方便一口氣連打好幾位 */
+function addPendingContact(){
+  var m=S.modal;if(!m)return;
+  var pre=((m.draft&&m.draft.contacts)||[]).length;
+  readModal();capturePending(m);
+  if(((m.draft.contacts)||[]).length===pre)return;
+  renderModal();
+  setTimeout(function(){var el=document.getElementById(m.type==="vendor"?"vt_name":"ct_name");if(el)el.focus();},0);
+}
 function capturePending(m){
   var d=m.draft;function v(id){var e=document.getElementById(id);return e?e.value.trim():"";}
-  if(m.type==="customer"){if(v("ct_name")||v("ct_email")||v("ct_phone"))d.contacts=(d.contacts||[]).concat([{id:uid(),name:v("ct_name"),title:v("ct_title"),email:v("ct_email"),phone:v("ct_phone"),note:v("ct_note")}]);}
-  else if(m.type==="vendor"){if(v("vt_name")||v("vt_email")||v("vt_phone"))d.contacts=(d.contacts||[]).concat([{id:uid(),name:v("vt_name"),title:v("vt_title"),email:v("vt_email"),phone:v("vt_phone"),note:v("vt_note")}]);}
+  if(m.type==="customer"){if(v("ct_name")||v("ct_email")||v("ct_phone"))d.contacts=(d.contacts||[]).concat([mkContact(v("ct_name"),v("ct_title"),v("ct_email"),v("ct_phone"),v("ct_note"))]);}
+  else if(m.type==="vendor"){if(v("vt_name")||v("vt_email")||v("vt_phone"))d.contacts=(d.contacts||[]).concat([mkContact(v("vt_name"),v("vt_title"),v("vt_email"),v("vt_phone"),v("vt_note"))]);}
   else if(m.type==="update"){if(v("em_s"))d.emails=(d.emails||[]).concat([{subject:v("em_s"),link:v("em_l")}]);}
   else if(m.type==="quote"){if(v("ti_q")||v("ti_p"))d.tiers=(d.tiers||[]).concat([{qty:v("ti_q"),price:v("ti_p")}]);}
   else if(m.type==="project"){if(v("fs_new"))d.factorySubjects=(d.factorySubjects||[]).concat([{id:uid(),subject:v("fs_new"),stage:d.stage||"待我處理"}]);}
@@ -3775,7 +3820,7 @@ function searchRender(q){
 }
 
 document.addEventListener("keydown",function(e){
-  if(e.key==="Escape"){if(document.getElementById("search-root").innerHTML){closeSearch();return;}if(S.modal){S.modal=null;renderModal();}}
+  if(e.key==="Escape"){if(document.getElementById("search-root").innerHTML){closeSearch();return;}if(S.modal){closeModalSafe();}}
   if(e.key==="/"&&!/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName)){e.preventDefault();openSearch();}
 });
 
